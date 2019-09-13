@@ -39,9 +39,11 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.URL;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@SuppressWarnings("access-can-be-private")
 public class S3ClientOperations {
 
     final private AWSCredentials credentials;
@@ -115,7 +117,11 @@ public class S3ClientOperations {
     }
 
     private File getFileFromResource(String resourceFile) {
-        return new File(this.getClass().getClassLoader().getResource(resourceFile).getFile());
+        URL url = this.getClass().getClassLoader().getResource(resourceFile);
+        if (url != null) {
+            return new File(url.getFile());
+        }
+        return null;
     }
 
     /**
@@ -129,6 +135,9 @@ public class S3ClientOperations {
      */
     public boolean uploadFileToBucket(String bucketName, String fileToUpload, String fileOnS3Name) {
         File file = getFileFromResource(fileToUpload);
+        if (file == null) {
+            return false;
+        }
         if (!s3client.doesBucketExistV2(bucketName)) {
             createBucket(bucketName);
         }
