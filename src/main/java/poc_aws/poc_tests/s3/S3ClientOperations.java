@@ -1,4 +1,4 @@
-/**
+/*
  Copyright (c) 2019 Gabriel Dimitriu All rights reserved.
  DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 
@@ -46,7 +46,6 @@ import java.util.stream.Collectors;
 @SuppressWarnings("access-can-be-private")
 public class S3ClientOperations {
 
-    final private AWSCredentials credentials;
     private AmazonS3 s3client;
 
     public static void main(String...args) {
@@ -55,12 +54,12 @@ public class S3ClientOperations {
         client.createBucket("gabrieldimitriutest");
         client.createBucket("gabrieldimitriutest1");
         List<Bucket> buckets = client.getAllBuckets();
-        buckets.stream().map(e -> e.getName()).forEach(System.out::println);
+        buckets.stream().map(Bucket::getName).forEach(System.out::println);
 
         System.out.println("Delete the not empty bucket at second run of the test");
         client.forceDeleteNotEmptyBucket("gabrieldimitriuload");
         System.out.println("Now delete all buckets");
-        client.removeBuckets(buckets).entrySet().stream().forEach(entry -> System.out.println("bucket=" + entry.getKey().getName() + " error = " + entry.getValue().getLocalizedMessage()));
+        client.removeBuckets(buckets).forEach((key, value) -> System.out.println("bucket=" + key.getName() + " error = " + value.getLocalizedMessage()));
 
         System.out.println("Create bucket and upload files");
         client.uploadFileToBucket("gabrieldimitriuload", "testDocument.txt", "testDocument1.txt");
@@ -69,7 +68,7 @@ public class S3ClientOperations {
 
         System.out.println("List object from the bucket");
         List<S3ObjectSummary> objectSummaries = client.getUploadedObjectsFromBucket("gabrieldimitriuload");
-        objectSummaries.stream().forEach(ob -> System.out.println(ob.getKey()));
+        objectSummaries.forEach(ob -> System.out.println(ob.getKey()));
 
         System.out.println("Download and print objects");
         List<InputStream> inputStreams = client.getAllObjectFromBucket("gabrieldimitriuload");
@@ -79,7 +78,7 @@ public class S3ClientOperations {
     }
 
     public S3ClientOperations() {
-        credentials = new ProfileCredentialsProvider().getCredentials();
+        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
         s3client = AmazonS3ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials)).withRegion(Regions.US_EAST_1).build();
     }
 
@@ -92,13 +91,12 @@ public class S3ClientOperations {
     }
 
     public List<Bucket> getAllBuckets() {
-        List<Bucket> buckets = s3client.listBuckets();
-        return buckets;
+        return s3client.listBuckets();
     }
 
     /**
      * This will remove the buckets, the removed bocket is removed also from the list
-     * @param toRemove
+     * @param toRemove list of buckets to be removed
      * @return map of buckets with exceptions
      */
     public Map<Bucket, Exception> removeBuckets(List<Bucket> toRemove) {
@@ -116,6 +114,11 @@ public class S3ClientOperations {
         return removeError;
     }
 
+    /**
+     * get the file from resource
+     * @param resourceFile  name of the resource
+     * @return the file
+     */
     private File getFileFromResource(String resourceFile) {
         URL url = this.getClass().getClassLoader().getResource(resourceFile);
         if (url != null) {
@@ -128,10 +131,10 @@ public class S3ClientOperations {
      * upload file to Bucket.
      * If the bucket does not exist create it.
      * If the file exist print message.
-     * @param bucketName
-     * @param fileToUpload
-     * @param fileOnS3Name
-     * @retun true if file is uploaded, false if exists
+     * @param bucketName the name of the bucket
+     * @param fileToUpload the file to upload
+     * @param fileOnS3Name the name of the file on s3
+     * @return true if file is uploaded, false if exists
      */
     public boolean uploadFileToBucket(String bucketName, String fileToUpload, String fileOnS3Name) {
         File file = getFileFromResource(fileToUpload);
@@ -152,25 +155,25 @@ public class S3ClientOperations {
 
     /**
      * get the summary for the objects from bucket.
-     * @param bucketName
+     * @param bucketName the name of the bucket
      * @return list of object summary
      */
     public List<S3ObjectSummary> getUploadedObjectsFromBucket(String bucketName) {
         List<S3ObjectSummary> objects = new ArrayList<>();
-        s3client.listObjects(bucketName).getObjectSummaries().stream().forEach(ob -> objects.add(ob));
+        s3client.listObjects(bucketName).getObjectSummaries().forEach(objects::add);
         return objects;
     }
 
     public List<InputStream> getAllObjectFromBucket(String bucketName) {
         List<InputStream> objects = new ArrayList<>();
-        s3client.listObjects(bucketName).getObjectSummaries().stream().forEach(ob -> objects.add(s3client.getObject(bucketName,ob.getKey()).getObjectContent()));
+        s3client.listObjects(bucketName).getObjectSummaries().forEach(ob -> objects.add(s3client.getObject(bucketName,ob.getKey()).getObjectContent()));
         return objects;
     }
 
     /**
      * force delete the bucket. s3 does not have the notion of folder is just a prefix in front of the file.
      * so to delete all elements from a bucket you have to delete all objects.
-     * @param bucketName
+     * @param bucketName the name of the bucket
      */
     private void forceDeleteNotEmptyBucket(String bucketName) {
         if (s3client.doesBucketExistV2(bucketName)) {
@@ -182,7 +185,7 @@ public class S3ClientOperations {
                 DeleteObjectsRequest delObjsReq = new DeleteObjectsRequest(bucketName).withKeys(objects.toArray(new String[1]));
                 s3client.deleteObjects(delObjsReq);
             } */
-            s3client.listObjects(bucketName).getObjectSummaries().stream().forEach(ob -> s3client.deleteObject(bucketName,ob.getKey()));
+            s3client.listObjects(bucketName).getObjectSummaries().forEach(ob -> s3client.deleteObject(bucketName,ob.getKey()));
             s3client.deleteBucket(bucketName);
         }
     }
