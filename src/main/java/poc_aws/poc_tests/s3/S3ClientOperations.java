@@ -47,34 +47,38 @@ import java.util.stream.Collectors;
 public class S3ClientOperations {
 
     private AmazonS3 s3client;
-
+    /**
+     * bucket should be unique across entire S3
+     */
+    private static final String BUCKET_PREFIX = "gabrieldimitriu";
+    private static final String BUCKET_LOAD = BUCKET_PREFIX + "load";
     public static void main(String...args) {
         System.out.println("Create buckets in s3");
         S3ClientOperations client = new S3ClientOperations();
-        client.createBucket("gabrieldimitriutest");
-        client.createBucket("gabrieldimitriutest1");
+        client.createBucket(BUCKET_PREFIX+ "test");
+        client.createBucket(BUCKET_PREFIX + "test1");
         List<Bucket> buckets = client.getAllBuckets();
         buckets.stream().map(Bucket::getName).forEach(System.out::println);
 
         System.out.println("Delete the not empty bucket at second run of the test");
-        client.forceDeleteNotEmptyBucket("gabrieldimitriuload");
+        client.forceDeleteNotEmptyBucket(BUCKET_LOAD);
         System.out.println("Now delete all buckets");
         client.removeBuckets(buckets).forEach((key, value) -> System.out.println("bucket=" + key.getName() + " error = " + value.getLocalizedMessage()));
 
         System.out.println("Create bucket and upload files");
-        client.uploadFileToBucket("gabrieldimitriuload", "testDocument.txt", "testDocument1.txt");
-        client.uploadFileToBucket("gabrieldimitriuload", "testDocument.txt", "testDocument2.txt");
-        client.uploadFileToBucket("gabrieldimitriuload", "testDocument.txt", "testDocument3.txt");
+        client.uploadFileToBucket(BUCKET_LOAD, "testDocument.txt", "testDocument1.txt");
+        client.uploadFileToBucket(BUCKET_LOAD, "testDocument.txt", "testDocument2.txt");
+        client.uploadFileToBucket(BUCKET_LOAD, "testDocument.txt", "testDocument3.txt");
 
         System.out.println("List object from the bucket");
-        List<S3ObjectSummary> objectSummaries = client.getUploadedObjectsFromBucket("gabrieldimitriuload");
+        List<S3ObjectSummary> objectSummaries = client.getUploadedObjectsFromBucket(BUCKET_LOAD);
         objectSummaries.forEach(ob -> System.out.println(ob.getKey()));
 
         System.out.println("Download and print objects");
-        List<InputStream> inputStreams = client.getAllObjectFromBucket("gabrieldimitriuload");
+        List<InputStream> inputStreams = client.getAllObjectFromBucket(BUCKET_LOAD);
         inputStreams.stream().map(is -> new BufferedReader(new InputStreamReader(is)).lines().collect(Collectors.joining("\n"))).forEach(System.out::println);
         System.out.println("Make the populated bucket pubic");
-        client.setPublicReadPolicy("gabrieldimitriuload");
+        client.setPublicReadPolicy(BUCKET_LOAD);
     }
 
     public S3ClientOperations() {
