@@ -1,3 +1,23 @@
+/*
+ Copyright (c) 2019 Gabriel Dimitriu All rights reserved.
+ DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+
+ This file is part of poc_aws project.
+
+ poc_aws is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ poc_aws is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with poc_aws.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package poc_aws.poc_tests.ec2;
 
 import com.amazonaws.auth.AWSCredentials;
@@ -14,6 +34,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Scanner;
 
 public class Ec2ClientOperations {
     /** ec2 client  */
@@ -39,10 +60,36 @@ public class Ec2ClientOperations {
         System.out.println("Reserved instances!");
         client.printAllInstances();
         System.out.println("Try to start new instance!");
-        client.runInstance("ami-00eb20669e0990cb4", InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_NAME);
+        String instanceId = client.runInstance("ami-00eb20669e0990cb4", InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_NAME);
         System.out.println("Launched successfully the instance!");
         System.out.println("Reserved instances!");
         client.printAllInstances();
+        System.out.println("Don't forget to terminate the instances!!! if you don't choose terminate");
+        System.out.println("Wait for the user command: terminate, stop, relaunch, start, quit");
+        Scanner sc = new Scanner(System.in);
+        String userChoice;
+        do {
+            userChoice = sc.nextLine();
+            switch (userChoice){
+                case "terminate":
+                    client.terminateInstance(instanceId);
+                    break;
+                case "stop":
+                    try {
+                        client.stopInstance(instanceId, true);
+                    } catch (AmazonEC2Exception ex) {
+                        System.out.println("Error stopping instance : "  + ex.getErrorCode());
+                    }
+                    break;
+                case "start":
+                    client.startInstance(instanceId);
+                    break;
+                case "relaunch":
+                    client.terminateInstance(instanceId);
+                    instanceId = client.runInstance("ami-00eb20669e0990cb4", InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_NAME);
+                    break;
+            }
+        } while(!"quit".equals(userChoice));
     }
 
     public Ec2ClientOperations() {
@@ -163,11 +210,51 @@ public class Ec2ClientOperations {
      * @param max maximum number of instances
      * @param keyName the keyPair to connect to instance
      * @param securityGroup the security group assigned to this instance
+     * @return string representing the instance id
      */
-    public void runInstance(String osType, InstanceType type, int min, int max, String keyName, String securityGroup) {
+    public String runInstance(String osType, InstanceType type, int min, int max, String keyName, String securityGroup) {
         RunInstancesRequest request = new RunInstancesRequest();
         request.withImageId(osType).withInstanceType(type).withMinCount(min).withMaxCount(max).withKeyName(keyName).withSecurityGroups(securityGroup);
         RunInstancesResult result = ec2Client.runInstances(request);
+        return result.getReservation().getInstances().get(0).getInstanceId();
+    }
+
+    /**
+     * Stop the instance
+     * @param instanceId  the id of the instance to be stop
+     * @param force true if the instance will be forcefully stoped.
+     */
+    public void stopInstance(String instanceId, boolean force) throws  AmazonEC2Exception{
+        DescribeInstancesRequest describeRequest = new DescribeInstancesRequest().withInstanceIds(instanceId);
+        DescribeInstancesResult describeResult = ec2Client.describeInstances(describeRequest);
+        if (describeResult.getReservations().get(0).getInstances().get(0).getState().getCode() == 16) {
+            StopInstancesRequest stopRequest = new StopInstancesRequest();
+            stopRequest.withInstanceIds(instanceId).withForce(force);
+            ec2Client.stopInstances(stopRequest);
+        } else {
+            System.out.printf("Instance with id %s is not running yet !\n", instanceId);
+        }
+    }
+
+
+    /**
+     * Start a stopped instance.
+     * @param instanceId the id of the instance to be started
+     */
+    public void startInstance(String instanceId) {
+        StartInstancesRequest request = new StartInstancesRequest();
+        request.withInstanceIds(instanceId);
+        ec2Client.startInstances(request);
+    }
+
+    /**
+     * Terminate an instance;
+     * @param instanceId the id of the instance to be terminated
+     */
+    public void terminateInstance(String instanceId) {
+        TerminateInstancesRequest request = new TerminateInstancesRequest();
+        request.withInstanceIds(instanceId);
+        ec2Client.terminateInstances(request);
     }
 
     /**
