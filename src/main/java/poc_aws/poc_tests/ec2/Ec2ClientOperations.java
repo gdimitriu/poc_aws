@@ -47,6 +47,7 @@ public class Ec2ClientOperations {
     private static final String SECURITY_GROUP_NAME = "MySecurityGroup";
 
     private KeyPair keyPair;
+
     public static void main(String...args) {
         Ec2ClientOperations client = new Ec2ClientOperations();
         client.createSecurityGroup(SECURITY_GROUP_NAME, "My secutity group");
@@ -92,6 +93,9 @@ public class Ec2ClientOperations {
         } while(!"quit".equals(userChoice));
     }
 
+    /**
+     * Default constructor.
+     */
     public Ec2ClientOperations() {
         AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
         ec2Client = AmazonEC2ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials)).withRegion(Regions.US_EAST_1).build();
@@ -99,7 +103,7 @@ public class Ec2ClientOperations {
 
     /**
      * Check if the security group with the specified name exists.
-     * @param sgName
+     * @param sgName security group name
      * @return true if the security group exists
      */
     public boolean isSecurityGroupCreated(String sgName) {
@@ -115,8 +119,8 @@ public class Ec2ClientOperations {
 
     /**
      * Create a security group
-     * @param name
-     * @param description
+     * @param name the name of the security group
+     * @param description description of the security group
      * @return true if it created the sg false otherwise
      */
     public boolean createSecurityGroup(String name, String description) {
@@ -165,7 +169,7 @@ public class Ec2ClientOperations {
      * @param  force if true the existing key will be deleted.
      */
     public void createKeyPair(String keyName, boolean force) {
-        if (isKeyPairCreated(keyName)) {
+        if (isKeyPairCreated(keyName) && force) {
             System.out.println("The existing keyPair " + keyName + " will be deleted and recreated!");
             DeleteKeyPairRequest request = new DeleteKeyPairRequest().withKeyName(keyName);
             try {
@@ -174,7 +178,9 @@ public class Ec2ClientOperations {
                 e.printStackTrace();
                 return;
             }
-       }
+       } else if (!force) {
+            return;
+        }
         CreateKeyPairRequest request = new CreateKeyPairRequest();
         request.withKeyName(keyName);
         CreateKeyPairResult result = ec2Client.createKeyPair(request);
@@ -188,7 +194,7 @@ public class Ec2ClientOperations {
      */
     public boolean isKeyPairCreated(String keyName) {
         DescribeKeyPairsResult result = ec2Client.describeKeyPairs();
-        return result.getKeyPairs().stream().map(key -> key.getKeyName()).anyMatch(str -> str.equals(keyName));
+        return result.getKeyPairs().stream().map(KeyPairInfo::getKeyName).anyMatch(str -> str.equals(keyName));
     }
 
     /**
