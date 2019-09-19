@@ -98,7 +98,8 @@ public class Ec2ClientOperations {
      */
     public Ec2ClientOperations() {
         AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        ec2Client = AmazonEC2ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials)).withRegion(Regions.US_EAST_1).build();
+        ec2Client = AmazonEC2ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
+                .withRegion(Regions.US_EAST_1).build();
     }
 
     /**

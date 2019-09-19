@@ -61,6 +61,13 @@
             <artifactId>aws-java-sdk-mq</artifactId>
             <version>${aws.version}</version>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-elasticloadbalancing -->
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-elasticloadbalancing</artifactId>
+            <version>${aws.version}</version>
+        </dependency>
+
         <!-- java 11 dependencies for jaxb -->
         <dependency>
             <groupId>javax.xml.bind</groupId>
