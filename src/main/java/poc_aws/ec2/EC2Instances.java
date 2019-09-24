@@ -3,6 +3,11 @@ package poc_aws.ec2;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.model.*;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.List;
+
 public class EC2Instances {
     /** ec2 client for amazon instances */
     private AmazonEC2 ec2Client;
@@ -18,19 +23,25 @@ public class EC2Instances {
      * @param min minimum number of instances
      * @param max maximum number of instances
      * @param keyName the keyPair to connect to instance
-     * @param securityGroup the security group assigned to this instance
-     * @param vpcID the id of the VPC in which we will launch this instance
+     * @param securityGroupId the security group id assigned to this instance
      * @param  subnetId the id of the subnet in which will run the instance
+     * @param installingScript  the script to run at install
      * @return string representing the instance id
      */
-    public String runInstance(String osType, InstanceType type, int min, int max, String keyName, String securityGroup, String vpcID, String subnetId) {
+    public String runInstance(String osType, InstanceType type, int min, int max, String keyName, String securityGroupId, String subnetId, String installingScript) {
         RunInstancesRequest request = new RunInstancesRequest();
-        request.withImageId(osType).withInstanceType(type).withMinCount(min).withMaxCount(max).withKeyName(keyName).withSecurityGroups(securityGroup);
-//        if (vpcID != null && !vpcID.isEmpty()) {
-//            request.withNetworkInterfaces()
+        request.withImageId(osType).withInstanceType(type).withMinCount(min).withMaxCount(max).withKeyName(keyName);//.withSecurityGroupIds(securityGroupId);
+        List<InstanceNetworkInterfaceSpecification> interfaces = new ArrayList<>();
+        InstanceNetworkInterfaceSpecification interfaceDNS = new InstanceNetworkInterfaceSpecification();
+        interfaceDNS.withSubnetId(subnetId).withAssociatePublicIpAddress(true).setDeviceIndex(0);
+        interfaceDNS.setGroups(Arrays.asList(securityGroupId));
+        interfaces.add(interfaceDNS);
+        request.withNetworkInterfaces(interfaces).withAdditionalInfo("--associate-public-ip-address");
+//        if (subnetId != null && !subnetId.isEmpty()) {
+//            request.withSubnetId(subnetId);
 //        }
-        if (subnetId != null && !subnetId.isEmpty()) {
-            request.withSubnetId(subnetId);
+        if (installingScript != null) {
+            request.withUserData(Base64.getEncoder().encodeToString(installingScript.getBytes()));
         }
         RunInstancesResult result = ec2Client.runInstances(request);
         return result.getReservation().getInstances().get(0).getInstanceId();

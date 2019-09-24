@@ -54,37 +54,44 @@ public class PharmaEc2Servers {
     private static final String AZ_1 = "us-east-1a";
     private static final String AZ_2 = "us-east-1b";
 
-    private static final String PHARMA_SUBNET_1 = "10.50.1.0/24";
-    private static final String PHARMA_SUBNET_2 = "10.50.2.0/24";
-    private static final String PHARMA_SUBNET_3 = "10.50.3.0/24";
-    private static final String PHARMA_SUBNET_4 = "10.50.4.0/24";
+    private static final String PHARMA_SUBNET_1 = "10.0.1.0/24";
+    private static final String PHARMA_SUBNET_2 = "10.0.2.0/24";
+    private static final String PHARMA_SUBNET_3 = "10.0.3.0/24";
+    private static final String PHARMA_SUBNET_4 = "10.0.4.0/24";
 
     private static final String MACHINE_IMAGE = "ami-00eb20669e0990cb4";
+
+    private static final String INSTALL_SCRIPT="#!/bin/bash\n" +
+            "sudo yum install httpd -y\n" +
+            "sudo chkconfig httpd on\n" +
+            "sudo /etc/init.d/httpd start\n";
 
     private PharmaEc2Servers() {
         ec2Authorization = new EC2Authorization(Regions.US_EAST_1);
         ec2Authorization.createKeyPair(KEY_PAIR_NAME, true);
         ec2Infrastructure = new EC2Infrastructure(ec2Authorization.getEc2Client());
         ec2Instances = new EC2Instances((ec2Authorization.getEc2Client()));
-        String vpcId = ec2Infrastructure.createVpc("10.50.0.0/16").getVpcId();
+        String vpcId = ec2Infrastructure.createVpc("10.0.0.0/16").getVpcId();
         ec2Infrastructure.createSecurityGroup(SECURITY_GROUP_DBSERVER_NAME,SECURITY_GROUP_DBSERVER_DESCRIPTION, vpcId);
-        ec2Infrastructure.addFirewallRule(SECURITY_GROUP_DBSERVER_NAME, Arrays.asList(new String[]{"0.0.0.0/0"}), "tcp", 22, 22);
+        ec2Infrastructure.addFirewallRule(vpcId, SECURITY_GROUP_DBSERVER_NAME, Arrays.asList(new String[]{"0.0.0.0/0"}), "tcp", 22, 22);
         ec2Infrastructure.createSecurityGroup(SECURITY_GROUP_WEBSERVER_NAME,SECURITY_GROUP_WEBSERVER_DESCRIPTION, vpcId);
-        ec2Infrastructure.addFirewallRule(SECURITY_GROUP_WEBSERVER_NAME, Arrays.asList(new String[]{"0.0.0.0/0"}), "tcp", 22, 22);
-        ec2Infrastructure.addFirewallRule(SECURITY_GROUP_WEBSERVER_NAME, Arrays.asList(new String[]{"0.0.0.0/0"}), "tcp", 80, 80);
+        ec2Infrastructure.addFirewallRule(vpcId, SECURITY_GROUP_WEBSERVER_NAME, Arrays.asList(new String[]{"0.0.0.0/0"}), "tcp", 22, 22);
+        ec2Infrastructure.addFirewallRule(vpcId, SECURITY_GROUP_WEBSERVER_NAME, Arrays.asList(new String[]{"0.0.0.0/0"}), "tcp", 80, 80);
         ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_1, AZ_1 );
         ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_2, AZ_2 );
         ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_3, AZ_1 );
         ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_4, AZ_2 );
         //create web machines
-        String w1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_WEBSERVER_NAME, vpcId, ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1));
-        String w2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_WEBSERVER_NAME, vpcId, ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2));
+        String w1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), INSTALL_SCRIPT);
+        String w2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), INSTALL_SCRIPT);
         //create db machines
-        String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_DBSERVER_NAME, vpcId, ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3));
-        String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_DBSERVER_NAME, vpcId, ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4));
+//        String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null);
+//        String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null);
+        ec2Infrastructure.createInternetGateway(vpcId);
 
-        ec2Infrastructure.createLoadBalancer(LOAD_BALANCER_NAME, Arrays.asList(AZ_1, AZ_2), Arrays.asList(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1),ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2)), SECURITY_GROUP_WEBSERVER_NAME);
-        ec2Infrastructure.addListnerToLoadBalancer(LOAD_BALANCER_NAME, "HTTP", 80, "HTTP", 80).addInstacesToLB(LOAD_BALANCER_NAME,Arrays.asList(w1Id, w2Id));
+//        ec2Infrastructure.addListnerToLoadBalancer(LOAD_BALANCER_NAME, "HTTP", 80, "HTTP", 80);
+//        ec2Infrastructure.createLoadBalancer(LOAD_BALANCER_NAME, Arrays.asList(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1),ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2)), ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME));
+//        ec2Infrastructure.addInstacesToLB(LOAD_BALANCER_NAME,Arrays.asList(w1Id, w2Id));
 
     }
 

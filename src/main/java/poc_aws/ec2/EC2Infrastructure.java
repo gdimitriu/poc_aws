@@ -26,13 +26,11 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import com.amazonaws.services.ec2.model.*;
+import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancing;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClientBuilder;
-import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClient;
-import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerListenersRequest;
-import com.amazonaws.services.elasticloadbalancing.model.CreateLoadBalancerRequest;
-import com.amazonaws.services.elasticloadbalancing.model.Listener;
-import com.amazonaws.services.elasticloadbalancing.model.RegisterInstancesWithLoadBalancerRequest;
+import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClientBuilder;
 import com.amazonaws.services.elasticloadbalancing.model.Instance;
+import com.amazonaws.services.elasticloadbalancing.model.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,12 +42,15 @@ public class EC2Infrastructure {
     private AmazonEC2 ec2Client;
 
     /** load balancer client*/
-    private AmazonElasticLoadBalancingClient lbClient;
+    private AmazonElasticLoadBalancing lbClient;
 
     /** maps of maps to keep correspondence of vpdid and sgid */
     Map<String, Map<String, String>> securityGroupsByVpc;
     /** map of subnets by address */
     Map<String, Subnet> subnetsByNetwork;
+
+    /** map of listeners of the load balancer name */
+    Map<String,List<Listener>> listenersOfLb;
 
     public EC2Infrastructure() {
         AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
@@ -57,7 +58,8 @@ public class EC2Infrastructure {
                 .withRegion(Regions.US_EAST_1).build();
         securityGroupsByVpc = new HashMap<>();
         subnetsByNetwork = new HashMap<>();
-        AmazonElasticLoadBalancingAsyncClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials)).withRegion(Regions.US_EAST_1).build();
+        listenersOfLb = new HashMap<>();
+        lbClient = AmazonElasticLoadBalancingClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials)).withRegion(Regions.US_EAST_1).build();
     }
 
     /**
@@ -69,7 +71,8 @@ public class EC2Infrastructure {
         this.ec2Client = client;
         securityGroupsByVpc = new HashMap<>();
         subnetsByNetwork = new HashMap<>();
-        AmazonElasticLoadBalancingAsyncClientBuilder.standard()
+        listenersOfLb = new HashMap<>();
+        lbClient = AmazonElasticLoadBalancingAsyncClientBuilder.standard()
                 .withCredentials(new AWSStaticCredentialsProvider(new ProfileCredentialsProvider().getCredentials())).withRegion(Regions.US_EAST_1).build();
     }
 
@@ -130,7 +133,24 @@ public class EC2Infrastructure {
     }
 
     /**
+     * get the first create security group id
+     * @param  vpcId the VPC id where the SG is assigned
+     * @param sgName security group name
+     * @return security group id
+     * TODO: now returns the first sg with the required name this should return all.
+     */
+    public String getSecurityGroupId(String vpcId, String sgName) {
+        Map<String, String> sgInVpc = securityGroupsByVpc.get(vpcId);
+        if (sgInVpc != null) {
+            return sgInVpc.get(sgName);
+        } else {
+            return null;
+        }
+    }
+
+    /**
      * add a firewall rule to the security group
+     * @param vpcId the Id the VPC where the SG is.
      * @param securityGroupName the name of the security group
      * @param ipRangesStr ip ranges for the required protocol
      * @param protocol the protocol
@@ -138,13 +158,13 @@ public class EC2Infrastructure {
      * @param toPort outbound port
      * @return  true if it could add the firewall rule
      */
-    public EC2Infrastructure addFirewallRule(String securityGroupName, List<String> ipRangesStr, String protocol, int fromPort, int toPort) {
+    public EC2Infrastructure addFirewallRule(String vpcId, String securityGroupName, List<String> ipRangesStr, String protocol, int fromPort, int toPort) {
         IpPermission ipPermission = new IpPermission();
         List<IpRange> ipRanges = new ArrayList<>();
         ipRangesStr.forEach(a -> ipRanges.add(new IpRange().withCidrIp(a)));
         ipPermission.withIpv4Ranges(ipRanges).withIpProtocol(protocol).withFromPort(fromPort).withToPort(toPort);
         AuthorizeSecurityGroupIngressRequest authorizeSecurityGroupIngressRequest = new AuthorizeSecurityGroupIngressRequest().withIpPermissions(ipPermission);
-        String securityGroupId = getSecurityGroupId(securityGroupName);
+        String securityGroupId = getSecurityGroupId(vpcId, securityGroupName);
         if (securityGroupId != null) {
             authorizeSecurityGroupIngressRequest.withGroupId(securityGroupId);
         } else {
@@ -162,21 +182,6 @@ public class EC2Infrastructure {
         return this;
     }
 
-    /**
-     * get the first create security group id
-     * @param sgName security group name
-     * @return security group id
-     * TODO: now returns the first sg with the required name this should return all.
-     */
-    public String getSecurityGroupId(String sgName) {
-        for ( Map.Entry<String, Map<String, String>> entry : securityGroupsByVpc.entrySet()) {
-            if(!entry.getValue().containsKey(sgName)) {
-                continue;
-            }
-            return entry.getValue().get(sgName);
-        }
-        return null;
-    }
 
     /**
      * Create a VPC.
@@ -190,6 +195,9 @@ public class EC2Infrastructure {
         }
         CreateVpcRequest request = new CreateVpcRequest(ipRange);
         CreateVpcResult result = ec2Client.createVpc(request);
+        ModifyVpcAttributeRequest requestDNS = new ModifyVpcAttributeRequest()
+                .withEnableDnsHostnames(true).withVpcId(result.getVpc().getVpcId());
+        ec2Client.modifyVpcAttribute(requestDNS);
         return result.getVpc();
     }
 
@@ -235,14 +243,30 @@ public class EC2Infrastructure {
     /**
      * create a clasic load balancer.
      * @param name name of the LB
-     * @param availabilityZones  the availability zones of the LB
      * @param subnets the subnets associated with LB
      * @param securityGroupId the security group
      */
-    public void createLoadBalancer(String name, List<String> availabilityZones, List<String> subnets, String...securityGroupId) {
-        CreateLoadBalancerRequest request = new CreateLoadBalancerRequest().withLoadBalancerName(name).withAvailabilityZones(availabilityZones);
+    public void createLoadBalancer(String name, List<String> subnets, String...securityGroupId) {
+        CreateLoadBalancerRequest request = new CreateLoadBalancerRequest().withLoadBalancerName(name);
         request.withSubnets(subnets).withSecurityGroups(securityGroupId);
+        request.withListeners(listenersOfLb.get(name));
         lbClient.createLoadBalancer(request);
+    }
+
+    /**
+     * Add a listener to a load balancer
+     * @param lbName name of the load balancer
+     * @param lbProtocol the load balancer protocol
+     * @param lbPort the load balancer port
+     * @param instanceProtocol the instance protocol
+     * @param instancePort the instance port
+     * @return this to be chained.
+     */
+    public EC2Infrastructure addListnerToExistingLoadBalancer(String lbName, String lbProtocol,int lbPort, String instanceProtocol, int instancePort) {
+        Listener listener = new Listener().withInstancePort(instancePort).withInstanceProtocol(instanceProtocol).withLoadBalancerPort(lbPort).withProtocol(lbProtocol);
+        CreateLoadBalancerListenersRequest request = new CreateLoadBalancerListenersRequest().withListeners(listener).withLoadBalancerName(lbName);
+        lbClient.createLoadBalancerListeners(request);
+        return this;
     }
 
     /**
@@ -256,8 +280,13 @@ public class EC2Infrastructure {
      */
     public EC2Infrastructure addListnerToLoadBalancer(String lbName, String lbProtocol,int lbPort, String instanceProtocol, int instancePort) {
         Listener listener = new Listener().withInstancePort(instancePort).withInstanceProtocol(instanceProtocol).withLoadBalancerPort(lbPort).withProtocol(lbProtocol);
-        CreateLoadBalancerListenersRequest request = new CreateLoadBalancerListenersRequest().withListeners(listener).withLoadBalancerName(lbName);
-        lbClient.createLoadBalancerListeners(request);
+        if (listenersOfLb.containsKey(lbName)) {
+            listenersOfLb.get(lbName).add(listener);
+        } else {
+            List<Listener> listeners = new ArrayList<>();
+            listeners.add(listener);
+            listenersOfLb.put(lbName,listeners );
+        }
         return this;
     }
 
@@ -275,6 +304,13 @@ public class EC2Infrastructure {
         }
         request.withLoadBalancerName(lbName).withInstances(instances);
         lbClient.registerInstancesWithLoadBalancer(request);
+        return this;
+    }
+
+    public EC2Infrastructure createInternetGateway(String vpcId) {
+        CreateInternetGatewayResult result = ec2Client.createInternetGateway(new CreateInternetGatewayRequest());
+        AttachInternetGatewayRequest request = new AttachInternetGatewayRequest().withInternetGatewayId(result.getInternetGateway().getInternetGatewayId()).withVpcId(vpcId);
+        ec2Client.attachInternetGateway(request);
         return this;
     }
 }
