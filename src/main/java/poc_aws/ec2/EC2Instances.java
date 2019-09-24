@@ -37,9 +37,6 @@ public class EC2Instances {
         interfaceDNS.setGroups(Arrays.asList(securityGroupId));
         interfaces.add(interfaceDNS);
         request.withNetworkInterfaces(interfaces).withAdditionalInfo("--associate-public-ip-address");
-//        if (subnetId != null && !subnetId.isEmpty()) {
-//            request.withSubnetId(subnetId);
-//        }
         if (installingScript != null) {
             request.withUserData(Base64.getEncoder().encodeToString(installingScript.getBytes()));
         }

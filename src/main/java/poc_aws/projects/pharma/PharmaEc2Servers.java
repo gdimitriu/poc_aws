@@ -85,13 +85,13 @@ public class PharmaEc2Servers {
         String w1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), INSTALL_SCRIPT);
         String w2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), INSTALL_SCRIPT);
         //create db machines
-//        String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null);
-//        String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null);
+        String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null);
+        String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null);
         ec2Infrastructure.createInternetGateway(vpcId);
 
-//        ec2Infrastructure.addListnerToLoadBalancer(LOAD_BALANCER_NAME, "HTTP", 80, "HTTP", 80);
-//        ec2Infrastructure.createLoadBalancer(LOAD_BALANCER_NAME, Arrays.asList(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1),ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2)), ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME));
-//        ec2Infrastructure.addInstacesToLB(LOAD_BALANCER_NAME,Arrays.asList(w1Id, w2Id));
+        ec2Infrastructure.addListnerToLoadBalancer(LOAD_BALANCER_NAME, "HTTP", 80, "HTTP", 80);
+        ec2Infrastructure.createLoadBalancer(LOAD_BALANCER_NAME, Arrays.asList(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1),ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2)), ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME));
+        ec2Infrastructure.addInstacesToLB(LOAD_BALANCER_NAME,Arrays.asList(w1Id, w2Id));
 
     }
 
