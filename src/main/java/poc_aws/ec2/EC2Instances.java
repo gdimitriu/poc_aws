@@ -26,11 +26,14 @@ public class EC2Instances {
      * @param securityGroupId the security group id assigned to this instance
      * @param  subnetId the id of the subnet in which will run the instance
      * @param installingScript  the script to run at install
+     * @paran name the name of the instance
      * @return string representing the instance id
      */
-    public String runInstance(String osType, InstanceType type, int min, int max, String keyName, String securityGroupId, String subnetId, String installingScript) {
+    public String runInstance(String osType, InstanceType type, int min, int max, String keyName, String securityGroupId, String subnetId, String installingScript, String name) {
         RunInstancesRequest request = new RunInstancesRequest();
-        request.withImageId(osType).withInstanceType(type).withMinCount(min).withMaxCount(max).withKeyName(keyName);//.withSecurityGroupIds(securityGroupId);
+        request.withImageId(osType).withInstanceType(type).withMinCount(min).withMaxCount(max).withKeyName(keyName);
+        //do not work with security group and subnets.
+        //.withSecurityGroupIds(securityGroupId);
         List<InstanceNetworkInterfaceSpecification> interfaces = new ArrayList<>();
         InstanceNetworkInterfaceSpecification interfaceDNS = new InstanceNetworkInterfaceSpecification();
         interfaceDNS.withSubnetId(subnetId).withAssociatePublicIpAddress(true).setDeviceIndex(0);
@@ -41,6 +44,9 @@ public class EC2Instances {
             request.withUserData(Base64.getEncoder().encodeToString(installingScript.getBytes()));
         }
         RunInstancesResult result = ec2Client.runInstances(request);
+        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(result.getReservation().getInstances().get(0).getInstanceId());
+        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        ec2Client.createTags(tagNameRequest);
         return result.getReservation().getInstances().get(0).getInstanceId();
     }
 

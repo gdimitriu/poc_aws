@@ -26,16 +26,14 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import com.amazonaws.services.ec2.model.*;
+import com.amazonaws.services.ec2.model.Tag;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancing;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClientBuilder;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClientBuilder;
 import com.amazonaws.services.elasticloadbalancing.model.Instance;
 import com.amazonaws.services.elasticloadbalancing.model.*;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class EC2Infrastructure {
     /** ec2 client for amazon instances */
@@ -221,13 +219,17 @@ public class EC2Infrastructure {
      * @param vpcId the vpcId in which the subnet will reside
      * @param network the ip range address of the network
      * @param availabilityZone the availability zone for the subnet
+     * @param name the name of the subnet
      * @return this to be chained.
      */
-    public EC2Infrastructure addSubnet(String vpcId, String network, String availabilityZone) {
+    public EC2Infrastructure addSubnet(String vpcId, String network, String availabilityZone, String name) {
         CreateSubnetRequest request = new CreateSubnetRequest();
         request.withAvailabilityZone(availabilityZone).withCidrBlock(network).withVpcId(vpcId);
         CreateSubnetResult result = ec2Client.createSubnet(request);
         subnetsByNetwork.put(network, result.getSubnet());
+        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(result.getSubnet().getSubnetId());
+        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        ec2Client.createTags(tagNameRequest);
         return this;
     }
 
@@ -248,7 +250,8 @@ public class EC2Infrastructure {
      */
     public void createLoadBalancer(String name, List<String> subnets, String...securityGroupId) {
         CreateLoadBalancerRequest request = new CreateLoadBalancerRequest().withLoadBalancerName(name);
-        request.withSubnets(subnets).withSecurityGroups(securityGroupId);
+        request.withSubnets(subnets).withSecurityGroups(securityGroupId)
+                .withTags(Arrays.asList(new com.amazonaws.services.elasticloadbalancing.model.Tag().withKey("Name").withValue(name)));
         request.withListeners(listenersOfLb.get(name));
         lbClient.createLoadBalancer(request);
     }
@@ -307,10 +310,45 @@ public class EC2Infrastructure {
         return this;
     }
 
-    public EC2Infrastructure createInternetGateway(String vpcId) {
+    /**
+     * Create internet gatway
+     * @param vpcId the VPC which wants to connect to internet
+     * @return internet gateway id
+     */
+    public String  createInternetGateway(String vpcId) {
         CreateInternetGatewayResult result = ec2Client.createInternetGateway(new CreateInternetGatewayRequest());
         AttachInternetGatewayRequest request = new AttachInternetGatewayRequest().withInternetGatewayId(result.getInternetGateway().getInternetGatewayId()).withVpcId(vpcId);
         ec2Client.attachInternetGateway(request);
+        return result.getInternetGateway().getInternetGatewayId();
+    }
+
+    /**
+     * add an external  route to the route table.
+     * @param address address
+     * @param internetGatewayId internet gateway id
+     * @param vpcId the VPC id
+     * @return this to be chained.
+     */
+    public EC2Infrastructure addRouteToRouteTable(String address, String internetGatewayId, String vpcId) {
+        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("vpc-id").withValues(vpcId));
+        String id = ec2Client.describeRouteTables(request1).getRouteTables().get(0).getRouteTableId();
+        CreateRouteRequest requestRoute = new CreateRouteRequest();
+        requestRoute.withRouteTableId(id).withDestinationCidrBlock(address).withGatewayId(internetGatewayId);
+        ec2Client.createRoute(requestRoute);
+        return this;
+    }
+
+    /**
+     * Assign a subnet to the Route Table
+     * @param subnetId the subnet id to be assigned
+     * @param vpcId the vpcId
+     * @return this to be chained
+     */
+    public EC2Infrastructure assignSubnetToRouteTable(String subnetId, String vpcId) {
+        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("vpc-id").withValues(vpcId));
+        String id = ec2Client.describeRouteTables(request1).getRouteTables().get(0).getRouteTableId();
+        AssociateRouteTableRequest request = new AssociateRouteTableRequest().withRouteTableId(id).withSubnetId(subnetId);
+        ec2Client.associateRouteTable(request);
         return this;
     }
 }

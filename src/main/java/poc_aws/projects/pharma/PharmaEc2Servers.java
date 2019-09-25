@@ -55,9 +55,13 @@ public class PharmaEc2Servers {
     private static final String AZ_2 = "us-east-1b";
 
     private static final String PHARMA_SUBNET_1 = "10.0.1.0/24";
+    private static final String PHARMA_SUBNET_1_NAME = "1aPublicPharma";
     private static final String PHARMA_SUBNET_2 = "10.0.2.0/24";
+    private static final String PHARMA_SUBNET_2_NAME = "1bPublicPharma";
     private static final String PHARMA_SUBNET_3 = "10.0.3.0/24";
+    private static final String PHARMA_SUBNET_3_NAME = "1aPrivatePharma";
     private static final String PHARMA_SUBNET_4 = "10.0.4.0/24";
+    private static final String PHARMA_SUBNET_4_NAME = "1bPrivatePharma";
 
     private static final String MACHINE_IMAGE = "ami-00eb20669e0990cb4";
 
@@ -77,17 +81,26 @@ public class PharmaEc2Servers {
         ec2Infrastructure.createSecurityGroup(SECURITY_GROUP_WEBSERVER_NAME,SECURITY_GROUP_WEBSERVER_DESCRIPTION, vpcId);
         ec2Infrastructure.addFirewallRule(vpcId, SECURITY_GROUP_WEBSERVER_NAME, Arrays.asList(new String[]{"0.0.0.0/0"}), "tcp", 22, 22);
         ec2Infrastructure.addFirewallRule(vpcId, SECURITY_GROUP_WEBSERVER_NAME, Arrays.asList(new String[]{"0.0.0.0/0"}), "tcp", 80, 80);
-        ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_1, AZ_1 );
-        ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_2, AZ_2 );
-        ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_3, AZ_1 );
-        ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_4, AZ_2 );
+        ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_1, AZ_1 , PHARMA_SUBNET_1_NAME);
+        ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_2, AZ_2, PHARMA_SUBNET_2_NAME );
+        ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_3, AZ_1 , PHARMA_SUBNET_3_NAME);
+        ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_4, AZ_2 , PHARMA_SUBNET_4_NAME);
         //create web machines
-        String w1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), INSTALL_SCRIPT);
-        String w2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), INSTALL_SCRIPT);
+        String w1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), INSTALL_SCRIPT, "WebInstance1");
+        String w2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), INSTALL_SCRIPT, "WebInstance2");
         //create db machines
-        String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null);
-        String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME), ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null);
-        ec2Infrastructure.createInternetGateway(vpcId);
+//        String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
+//        ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null, "DBInstance1");
+//        String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
+//        ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null, "DBInstance2");
+
+
+        String igId = ec2Infrastructure.createInternetGateway(vpcId);
+        ec2Infrastructure.addRouteToRouteTable("0.0.0.0/0", igId, vpcId);
+        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), vpcId);
+        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), vpcId);
 
         ec2Infrastructure.addListnerToLoadBalancer(LOAD_BALANCER_NAME, "HTTP", 80, "HTTP", 80);
         ec2Infrastructure.createLoadBalancer(LOAD_BALANCER_NAME, Arrays.asList(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1),ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2)), ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME));
