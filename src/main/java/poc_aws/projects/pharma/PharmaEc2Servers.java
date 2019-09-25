@@ -26,6 +26,7 @@ import poc_aws.ec2.EC2Infrastructure;
 import poc_aws.ec2.EC2Authorization;
 import poc_aws.ec2.EC2Instances;
 
+import java.io.IOException;
 import java.util.Arrays;
 
 public class PharmaEc2Servers {
@@ -66,6 +67,7 @@ public class PharmaEc2Servers {
     private static final String MACHINE_IMAGE = "ami-00eb20669e0990cb4";
 
     private static final String INSTALL_SCRIPT="#!/bin/bash\n" +
+            "sudo yum update -y\n" +
             "sudo yum install httpd -y\n" +
             "sudo chkconfig httpd on\n" +
             "sudo /etc/init.d/httpd start\n";
@@ -73,6 +75,11 @@ public class PharmaEc2Servers {
     private PharmaEc2Servers() {
         ec2Authorization = new EC2Authorization(Regions.US_EAST_1);
         ec2Authorization.createKeyPair(KEY_PAIR_NAME, true);
+        try {
+            ec2Authorization.savePEMToFile("d:\\" + KEY_PAIR_NAME);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         ec2Infrastructure = new EC2Infrastructure(ec2Authorization.getEc2Client());
         ec2Instances = new EC2Instances((ec2Authorization.getEc2Client()));
         String vpcId = ec2Infrastructure.createVpc("10.0.0.0/16").getVpcId();
@@ -91,10 +98,10 @@ public class PharmaEc2Servers {
         String w2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), INSTALL_SCRIPT, "WebInstance2");
         //create db machines
-//        String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
-//        ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null, "DBInstance1");
-//        String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
-//        ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null, "DBInstance2");
+        String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null, "DBInstance1");
+        String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null, "DBInstance2");
 
 
         String igId = ec2Infrastructure.createInternetGateway(vpcId);
