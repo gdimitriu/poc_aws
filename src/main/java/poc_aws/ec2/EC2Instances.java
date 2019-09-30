@@ -46,9 +46,10 @@ public class EC2Instances {
      * @param  subnetId the id of the subnet in which will run the instance
      * @param installingScript  the script to run at install
      * @paran name the name of the instance
+     * @param instanceProfile the name of the instance profile (which is the same as the role name)
      * @return string representing the instance id
      */
-    public String runInstance(String osType, InstanceType type, int min, int max, String keyName, String securityGroupId, String subnetId, String installingScript, String name) {
+    public String runInstance(String osType, InstanceType type, int min, int max, String keyName, String securityGroupId, String subnetId, String installingScript, String name, String instanceProfile) {
         RunInstancesRequest request = new RunInstancesRequest();
         request.withImageId(osType).withInstanceType(type).withMinCount(min).withMaxCount(max).withKeyName(keyName);
         //do not work with security group and subnets.
@@ -62,6 +63,8 @@ public class EC2Instances {
         if (installingScript != null) {
             request.withUserData(Base64.getEncoder().encodeToString(installingScript.getBytes()));
         }
+        IamInstanceProfileSpecification profile = new IamInstanceProfileSpecification().withName(instanceProfile);
+        request.withIamInstanceProfile(profile);
         RunInstancesResult result = ec2Client.runInstances(request);
         CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(result.getReservation().getInstances().get(0).getInstanceId());
         tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));

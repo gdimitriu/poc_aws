@@ -27,6 +27,7 @@ import com.amazonaws.services.identitymanagement.AmazonIdentityManagement;
 import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClientBuilder;
 import com.amazonaws.services.identitymanagement.model.AttachRolePolicyRequest;
 import com.amazonaws.services.identitymanagement.model.CreateRoleRequest;
+import com.amazonaws.services.identitymanagement.model.GetInstanceProfileRequest;
 
 public class AIMClientOperations {
     /** aim client  */
@@ -46,8 +47,9 @@ public class AIMClientOperations {
 
     public static void main(String...args) {
         AIMClientOperations client = new AIMClientOperations();
-        client.createRoleS3();
-        client.attachRolePolicy();
+        client.describeRole();
+//        client.createRoleS3();
+//        client.attachRolePolicy();
     }
 
     /**
@@ -68,5 +70,11 @@ public class AIMClientOperations {
     private void attachRolePolicy() {
         AttachRolePolicyRequest request = new AttachRolePolicyRequest().withRoleName("MyS3role").withPolicyArn("arn:aws:iam::aws:policy/AmazonS3FullAccess");
         aimClient.attachRolePolicy(request);
+    }
+
+    private void describeRole() {
+
+        GetInstanceProfileRequest request =new GetInstanceProfileRequest().withInstanceProfileName("EC2_WITH_S3");
+        System.out.println(aimClient.getInstanceProfile(request).getInstanceProfile());
     }
 }

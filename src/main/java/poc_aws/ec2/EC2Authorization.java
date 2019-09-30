@@ -27,6 +27,9 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import com.amazonaws.services.ec2.model.*;
+import com.amazonaws.services.identitymanagement.AmazonIdentityManagement;
+import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClientBuilder;
+import com.amazonaws.services.identitymanagement.model.*;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -39,10 +42,28 @@ public class EC2Authorization {
     /** key pair for connection to EC2 instances */
     private KeyPair keyPair;
 
+    /** aim client  */
+    private AmazonIdentityManagement aimClient;
+
+    private static String EC2_FULL_S3 = "{"+
+            "    \"Version\": \"2012-10-17\","+
+            "    \"Statement\": ["+
+            "        {"+
+            "            \"Effect\": \"Allow\","+
+            "            \"Action\": \"sts:AssumeRole\","+
+            "            \"Principal\": {"+
+            "                  \"Service\":[ \"ec2.amazonaws.com\"]"+
+            "            }" +
+            "        }"+
+            "    ]"+
+            "}";
+
     public EC2Authorization(Regions region) {
         AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
         ec2Client = AmazonEC2ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
                 .withRegion(region).build();
+        aimClient = AmazonIdentityManagementClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
+                .withRegion("AWS_GLOBAL").build();
     }
 
     /**
@@ -98,4 +119,22 @@ public class EC2Authorization {
         keyPair =  result.getKeyPair();
     }
 
+    /**
+     * This will create a role for EC2 to have full access to S3.
+     * It will create also a intance profile with the same name as the role and with the role attached.
+     * @param name name of the role and instance profile
+     * @retun the arn of the created role.
+     */
+    public String createEC2S3FullRoleAndProfile(String name) {
+        CreateRoleRequest request = new CreateRoleRequest();
+        request.withRoleName(name).withAssumeRolePolicyDocument(EC2_FULL_S3);
+        aimClient.createRole(request);
+        AttachRolePolicyRequest requestAtachPolicy= new AttachRolePolicyRequest().withRoleName(name).withPolicyArn("arn:aws:iam::aws:policy/AmazonS3FullAccess");
+        aimClient.attachRolePolicy(requestAtachPolicy);
+        CreateInstanceProfileRequest requestCreateInstanceProfile = new CreateInstanceProfileRequest().withInstanceProfileName(name);
+        CreateInstanceProfileResult result = aimClient.createInstanceProfile(requestCreateInstanceProfile);
+        AddRoleToInstanceProfileRequest requstAddRoleToInstanceProfile = new AddRoleToInstanceProfileRequest().withInstanceProfileName(name).withRoleName(name);
+        aimClient.addRoleToInstanceProfile(requstAddRoleToInstanceProfile);
+        return result.getInstanceProfile().getArn();
+    }
 }

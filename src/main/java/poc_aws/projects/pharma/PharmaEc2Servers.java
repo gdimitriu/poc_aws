@@ -70,16 +70,33 @@ public class PharmaEc2Servers {
             "sudo yum update -y\n" +
             "sudo yum install httpd -y\n" +
             "sudo chkconfig httpd on\n" +
-            "sudo /etc/init.d/httpd start\n";
+            "sudo /etc/init.d/httpd start\n" +
+            "aws s3 cp s3://gabrieldimitriu/web.zip web.zip\n" +
+            "sudo unzip web.zip -d /var/www/html/\n" +
+            "rm web.zip\n" +
+            "aws s3 cp s3://gabrieldimitriu/welcome.conf welcome.conf\n" +
+            "sudo cp welcome.conf /etc/httpd/conf.d/" +
+            "rm welcome.conf\n" +
+            "sudo /etc/init.d/httpd restart";
 
+    private static final String EC2_FULL_ACCESS_TO_S3 = "EC2_WITH_S3";
     private PharmaEc2Servers() {
         ec2Authorization = new EC2Authorization(Regions.US_EAST_1);
+        //create the role and instance profile for access to S3.
+        ec2Authorization.createEC2S3FullRoleAndProfile(EC2_FULL_ACCESS_TO_S3);
+        //sleep is needed to the role to be available to all AZ.
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+
+        }
         ec2Authorization.createKeyPair(KEY_PAIR_NAME, true);
         try {
-            ec2Authorization.savePEMToFile("d:\\" + KEY_PAIR_NAME);
+            ec2Authorization.savePEMToFile("d:\\" + KEY_PAIR_NAME + ".pem");
         } catch (IOException e) {
             e.printStackTrace();
         }
+        //create the network infrastructure.
         ec2Infrastructure = new EC2Infrastructure(ec2Authorization.getEc2Client());
         ec2Instances = new EC2Instances((ec2Authorization.getEc2Client()));
         String vpcId = ec2Infrastructure.createVpc("10.0.0.0/16").getVpcId();
@@ -94,14 +111,14 @@ public class PharmaEc2Servers {
         ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_4, AZ_2 , PHARMA_SUBNET_4_NAME);
         //create web machines
         String w1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
-                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), INSTALL_SCRIPT, "WebInstance1");
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), INSTALL_SCRIPT, "WebInstance1",EC2_FULL_ACCESS_TO_S3);
         String w2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
-                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), INSTALL_SCRIPT, "WebInstance2");
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), INSTALL_SCRIPT, "WebInstance2", EC2_FULL_ACCESS_TO_S3);
         //create db machines
         String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
-                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null, "DBInstance1");
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null, "DBInstance1", EC2_FULL_ACCESS_TO_S3);
         String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
-                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null, "DBInstance2");
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null, "DBInstance2", EC2_FULL_ACCESS_TO_S3);
 
 
         String igId = ec2Infrastructure.createInternetGateway(vpcId);
