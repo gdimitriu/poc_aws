@@ -27,10 +27,10 @@ import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import com.amazonaws.services.ec2.model.*;
 import com.amazonaws.services.ec2.model.Tag;
+import com.amazonaws.services.elasticloadbalancing.model.Instance;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancing;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClientBuilder;
 import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClientBuilder;
-import com.amazonaws.services.elasticloadbalancing.model.Instance;
 import com.amazonaws.services.elasticloadbalancing.model.*;
 
 import java.util.*;
@@ -247,13 +247,19 @@ public class EC2Infrastructure {
      * @param name name of the LB
      * @param subnets the subnets associated with LB
      * @param securityGroupId the security group
+     * @param crossBlancingAZ true if will load balancing in all AX
      */
-    public void createLoadBalancer(String name, List<String> subnets, String...securityGroupId) {
+    public void createLoadBalancer(String name, boolean crossBlancingAZ, List<String> subnets, String...securityGroupId) {
         CreateLoadBalancerRequest request = new CreateLoadBalancerRequest().withLoadBalancerName(name);
         request.withSubnets(subnets).withSecurityGroups(securityGroupId)
                 .withTags(Arrays.asList(new com.amazonaws.services.elasticloadbalancing.model.Tag().withKey("Name").withValue(name)));
         request.withListeners(listenersOfLb.get(name));
-        lbClient.createLoadBalancer(request);
+        CreateLoadBalancerResult result = lbClient.createLoadBalancer(request);
+        if(crossBlancingAZ) {
+           ModifyLoadBalancerAttributesRequest enableLBAZ = new ModifyLoadBalancerAttributesRequest();
+           enableLBAZ.withLoadBalancerName(name).withLoadBalancerAttributes(new LoadBalancerAttributes().withCrossZoneLoadBalancing(new CrossZoneLoadBalancing().withEnabled(true)));
+           lbClient.modifyLoadBalancerAttributes(enableLBAZ);
+        }
     }
 
     /**

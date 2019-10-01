@@ -68,6 +68,14 @@
             <version>${aws.version}</version>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-iam -->
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>aws-java-sdk-iam</artifactId>
+            <version>${aws.version}</version>
+        </dependency>
+
+
         <!-- java 11 dependencies for jaxb -->
         <dependency>
             <groupId>javax.xml.bind</groupId>

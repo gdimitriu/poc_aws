@@ -25,6 +25,7 @@ import com.amazonaws.services.ec2.model.InstanceType;
 import poc_aws.ec2.EC2Infrastructure;
 import poc_aws.ec2.EC2Authorization;
 import poc_aws.ec2.EC2Instances;
+import poc_aws.s3.S3Infrastructure;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -34,6 +35,7 @@ public class PharmaEc2Servers {
     private EC2Infrastructure ec2Infrastructure;
     private EC2Authorization ec2Authorization;
     private EC2Instances ec2Instances;
+    private S3Infrastructure s3Infrastructure;
 
     /** key-pair to connect to EC2 instances */
     private static final String KEY_PAIR_NAME = "javaAutoKeyPair";
@@ -65,32 +67,57 @@ public class PharmaEc2Servers {
     private static final String PHARMA_SUBNET_4_NAME = "1bPrivatePharma";
 
     private static final String MACHINE_IMAGE = "ami-00eb20669e0990cb4";
+    /** name of the bucket where the website sources will reside */
+    private static final String ROOT_BUCKET_DELIVERY_NAME = "gabrieldimitriupharmaweb";
 
-    private static final String INSTALL_SCRIPT="#!/bin/bash\n" +
+    /** Install script for the first web server */
+    private static final String INSTALL_SCRIPT_1="#!/bin/bash\n" +
+            "exec > /tmp/start.log  2>&1\n" +
             "sudo yum update -y\n" +
             "sudo yum install httpd -y\n" +
             "sudo chkconfig httpd on\n" +
-            "sudo /etc/init.d/httpd start\n" +
-            "aws s3 cp s3://gabrieldimitriu/web.zip web.zip\n" +
+            "cd /hoem/ec2-user\n" +
+            "aws s3 cp s3://" + ROOT_BUCKET_DELIVERY_NAME + "/pharma_webservers/web1.zip web.zip\n" +
             "sudo unzip web.zip -d /var/www/html/\n" +
             "rm web.zip\n" +
-            "aws s3 cp s3://gabrieldimitriu/welcome.conf welcome.conf\n" +
+            "aws s3 cp s3://" + ROOT_BUCKET_DELIVERY_NAME + "/pharma_webservers/welcome.conf welcome.conf\n" +
             "sudo cp welcome.conf /etc/httpd/conf.d/" +
             "rm welcome.conf\n" +
-            "sudo /etc/init.d/httpd restart";
+            "sudo /etc/init.d/httpd start";
+
+    /** Install script for the second web server */
+    private static final String INSTALL_SCRIPT_2="#!/bin/bash\n" +
+            "exec > /tmp/start.log  2>&1\n" +
+            "sudo yum update -y\n" +
+            "sudo yum install httpd -y\n" +
+            "sudo chkconfig httpd on\n" +
+            "cd /hoem/ec2-user\n" +
+            "aws s3 cp s3://" + ROOT_BUCKET_DELIVERY_NAME + "/pharma_webservers/web2.zip web.zip\n" +
+            "sudo unzip web.zip -d /var/www/html/\n" +
+            "rm web.zip\n" +
+            "aws s3 cp s3://" + ROOT_BUCKET_DELIVERY_NAME + "/pharma_webservers/welcome.conf welcome.conf\n" +
+            "sudo cp welcome.conf /etc/httpd/conf.d/" +
+            "rm welcome.conf\n" +
+            "sudo /etc/init.d/httpd start";
 
     private static final String EC2_FULL_ACCESS_TO_S3 = "EC2_WITH_S3";
     private PharmaEc2Servers() {
         ec2Authorization = new EC2Authorization(Regions.US_EAST_1);
         //create the role and instance profile for access to S3.
         ec2Authorization.createEC2S3FullRoleAndProfile(EC2_FULL_ACCESS_TO_S3);
+        //upload the webservers on S3.
+        s3Infrastructure = new S3Infrastructure(Regions.US_EAST_1);
+        s3Infrastructure.uploadNewFileToBucket(ROOT_BUCKET_DELIVERY_NAME, "pharma_webservers/pharma_web1.zip", "pharma_webservers/web1.zip");
+        s3Infrastructure.uploadNewFileToBucket(ROOT_BUCKET_DELIVERY_NAME, "pharma_webservers/pharma_web2.zip", "pharma_webservers/web2.zip");
+        s3Infrastructure.uploadNewFileToBucket(ROOT_BUCKET_DELIVERY_NAME, "pharma_webservers/welcome.conf", "pharma_webservers/welcome.conf");
+        ec2Authorization.createKeyPair(KEY_PAIR_NAME, true);
         //sleep is needed to the role to be available to all AZ.
         try {
             Thread.sleep(5000);
         } catch (InterruptedException e) {
 
         }
-        ec2Authorization.createKeyPair(KEY_PAIR_NAME, true);
+
         try {
             ec2Authorization.savePEMToFile("d:\\" + KEY_PAIR_NAME + ".pem");
         } catch (IOException e) {
@@ -111,9 +138,9 @@ public class PharmaEc2Servers {
         ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_4, AZ_2 , PHARMA_SUBNET_4_NAME);
         //create web machines
         String w1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
-                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), INSTALL_SCRIPT, "WebInstance1",EC2_FULL_ACCESS_TO_S3);
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), INSTALL_SCRIPT_1, "WebInstance1",EC2_FULL_ACCESS_TO_S3);
         String w2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
-                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), INSTALL_SCRIPT, "WebInstance2", EC2_FULL_ACCESS_TO_S3);
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), INSTALL_SCRIPT_2, "WebInstance2", EC2_FULL_ACCESS_TO_S3);
         //create db machines
         String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null, "DBInstance1", EC2_FULL_ACCESS_TO_S3);
@@ -127,7 +154,8 @@ public class PharmaEc2Servers {
         ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), vpcId);
 
         ec2Infrastructure.addListnerToLoadBalancer(LOAD_BALANCER_NAME, "HTTP", 80, "HTTP", 80);
-        ec2Infrastructure.createLoadBalancer(LOAD_BALANCER_NAME, Arrays.asList(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1),ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2)), ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME));
+        ec2Infrastructure.createLoadBalancer(LOAD_BALANCER_NAME, true,  Arrays.asList(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1),
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2)), ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME));
         ec2Infrastructure.addInstacesToLB(LOAD_BALANCER_NAME,Arrays.asList(w1Id, w2Id));
 
     }

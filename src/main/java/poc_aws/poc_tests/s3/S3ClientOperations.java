@@ -66,9 +66,9 @@ public class S3ClientOperations {
         client.removeBuckets(buckets).forEach((key, value) -> System.out.println("bucket=" + key.getName() + " error = " + value.getLocalizedMessage()));
 
         System.out.println("Create bucket and upload files");
-        client.uploadFileToBucket(BUCKET_LOAD, "testDocument.txt", "testDocument1.txt");
-        client.uploadFileToBucket(BUCKET_LOAD, "testDocument.txt", "testDocument2.txt");
-        client.uploadFileToBucket(BUCKET_LOAD, "testDocument.txt", "testDocument3.txt");
+        client.uploadFileToBucket(BUCKET_LOAD, "poc_tests/testDocument.txt", "testDocument1.txt");
+        client.uploadFileToBucket(BUCKET_LOAD, "poc_tests/testDocument.txt", "testDocument2.txt");
+        client.uploadFileToBucket(BUCKET_LOAD, "poc_tests/testDocument.txt", "testDocument3.txt");
 
         System.out.println("List object from the bucket");
         List<S3ObjectSummary> objectSummaries = client.getUploadedObjectsFromBucket(BUCKET_LOAD);
