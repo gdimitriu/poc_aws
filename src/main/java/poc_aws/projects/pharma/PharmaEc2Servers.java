@@ -61,6 +61,7 @@ public class PharmaEc2Servers {
 
     private static final String INTERNET_GATEWAY_NAME = "IgwPharma";
     private static final String NAT_GATEWAY_NAME = "NatPharma";
+    private static final String EIP_NAME = "eilpPharma";
 
     private static final String AZ_1 = "us-east-1a";
     private static final String AZ_2 = "us-east-1b";
@@ -163,7 +164,7 @@ public class PharmaEc2Servers {
         ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), PUBLIC_ROUTE_TABLE_NAME);
 
         //create the NAT
-        String elasticIpId = ec2Infrastructure.createElasticIpAddressOnVpc();
+        String elasticIpId = ec2Infrastructure.createElasticIpAddressOnVpc(EIP_NAME);
 
         String natGateway1 = ec2Infrastructure.createNatGateway(NAT_GATEWAY_NAME, ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), elasticIpId);
         ec2Infrastructure.createRouteTable(PRIVATE_ROUTE_TABLE_NAME, vpcId);

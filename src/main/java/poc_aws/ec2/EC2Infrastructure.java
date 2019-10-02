@@ -440,11 +440,16 @@ public class EC2Infrastructure {
 
     /**
      * Create ElasticIpAddress.
+     * @param name  the name of the elastic Ip Address.
      * @return the id of the allocated elastic Ip address
      */
-    public String createElasticIpAddressOnVpc() {
+    public String createElasticIpAddressOnVpc(String name) {
         AllocateAddressRequest request = new AllocateAddressRequest().withDomain(DomainType.Vpc);
-        return ec2Client.allocateAddress(request).getAllocationId();
+        String ipId = ec2Client.allocateAddress(request).getAllocationId();
+        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(ipId);
+        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        ec2Client.createTags(tagNameRequest);
+        return ipId;
     }
 
     /**
