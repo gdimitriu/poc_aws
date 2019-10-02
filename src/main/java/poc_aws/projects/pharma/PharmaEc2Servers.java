@@ -54,6 +54,14 @@ public class PharmaEc2Servers {
 
     private static final String LOAD_BALANCER_NAME = "PharmaLB";
 
+    private static final String VPC_NAME = "PharmaVPC";
+
+    private static final String PUBLIC_ROUTE_TABLE_NAME = "PubicPharmaRT";
+    private static final String PRIVATE_ROUTE_TABLE_NAME = "PrivatePharmaRT";
+
+    private static final String INTERNET_GATEWAY_NAME = "IgwPharma";
+    private static final String NAT_GATEWAY_NAME = "NatPharma";
+
     private static final String AZ_1 = "us-east-1a";
     private static final String AZ_2 = "us-east-1b";
 
@@ -76,7 +84,7 @@ public class PharmaEc2Servers {
             "sudo yum update -y\n" +
             "sudo yum install httpd -y\n" +
             "sudo chkconfig httpd on\n" +
-            "cd /hoem/ec2-user\n" +
+            "cd /home/ec2-user\n" +
             "aws s3 cp s3://" + ROOT_BUCKET_DELIVERY_NAME + "/pharma_webservers/web1.zip web.zip\n" +
             "sudo unzip web.zip -d /var/www/html/\n" +
             "rm web.zip\n" +
@@ -91,7 +99,7 @@ public class PharmaEc2Servers {
             "sudo yum update -y\n" +
             "sudo yum install httpd -y\n" +
             "sudo chkconfig httpd on\n" +
-            "cd /hoem/ec2-user\n" +
+            "cd /home/ec2-user\n" +
             "aws s3 cp s3://" + ROOT_BUCKET_DELIVERY_NAME + "/pharma_webservers/web2.zip web.zip\n" +
             "sudo unzip web.zip -d /var/www/html/\n" +
             "rm web.zip\n" +
@@ -123,10 +131,11 @@ public class PharmaEc2Servers {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
         //create the network infrastructure.
         ec2Infrastructure = new EC2Infrastructure(ec2Authorization.getEc2Client());
         ec2Instances = new EC2Instances((ec2Authorization.getEc2Client()));
-        String vpcId = ec2Infrastructure.createVpc("10.0.0.0/16").getVpcId();
+        String vpcId = ec2Infrastructure.createVpc(VPC_NAME, "10.0.0.0/16").getVpcId();
         ec2Infrastructure.createSecurityGroup(SECURITY_GROUP_DBSERVER_NAME,SECURITY_GROUP_DBSERVER_DESCRIPTION, vpcId);
         ec2Infrastructure.addFirewallRule(vpcId, SECURITY_GROUP_DBSERVER_NAME, Arrays.asList(new String[]{"0.0.0.0/0"}), "tcp", 22, 22);
         ec2Infrastructure.createSecurityGroup(SECURITY_GROUP_WEBSERVER_NAME,SECURITY_GROUP_WEBSERVER_DESCRIPTION, vpcId);
@@ -147,16 +156,26 @@ public class PharmaEc2Servers {
         String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null, "DBInstance2", EC2_FULL_ACCESS_TO_S3);
 
+        String igId = ec2Infrastructure.createInternetGateway(INTERNET_GATEWAY_NAME, vpcId);
+        ec2Infrastructure.addTagNameToNewCreatedRouteTable(PUBLIC_ROUTE_TABLE_NAME , vpcId);
+        ec2Infrastructure.addRouteToRouteTableToInternetGatewayId("0.0.0.0/0", igId, PUBLIC_ROUTE_TABLE_NAME);
+        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), PUBLIC_ROUTE_TABLE_NAME);
+        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), PUBLIC_ROUTE_TABLE_NAME);
 
-        String igId = ec2Infrastructure.createInternetGateway(vpcId);
-        ec2Infrastructure.addRouteToRouteTable("0.0.0.0/0", igId, vpcId);
-        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), vpcId);
-        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), vpcId);
+        //create the NAT
+        String elasticIpId = ec2Infrastructure.createElasticIpAddressOnVpc();
 
+        String natGateway1 = ec2Infrastructure.createNatGateway(NAT_GATEWAY_NAME, ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), elasticIpId);
+        ec2Infrastructure.createRouteTable(PRIVATE_ROUTE_TABLE_NAME, vpcId);
+        ec2Infrastructure.addRouteToRouteTableToNatGatewayId("0.0.0.0/0", natGateway1, PRIVATE_ROUTE_TABLE_NAME);
+        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), PRIVATE_ROUTE_TABLE_NAME);
+        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), PRIVATE_ROUTE_TABLE_NAME);
+        //create the load balancer
         ec2Infrastructure.addListnerToLoadBalancer(LOAD_BALANCER_NAME, "HTTP", 80, "HTTP", 80);
         ec2Infrastructure.createLoadBalancer(LOAD_BALANCER_NAME, true,  Arrays.asList(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1),
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2)), ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME));
         ec2Infrastructure.addInstacesToLB(LOAD_BALANCER_NAME,Arrays.asList(w1Id, w2Id));
+
 
     }
 

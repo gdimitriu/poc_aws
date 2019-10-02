@@ -183,16 +183,20 @@ public class EC2Infrastructure {
 
     /**
      * Create a VPC.
-     * @param ipRange
+     * @param name the name of the vpc
+     * @param ipRange the ip range
      * @return the new created VPC or the existing one if exists.
      */
-    public Vpc createVpc(String ipRange) {
+    public Vpc createVpc(String name, String ipRange) {
         Vpc vpc = getVpcIfExists(ipRange);
         if (vpc != null) {
             return vpc;
         }
         CreateVpcRequest request = new CreateVpcRequest(ipRange);
         CreateVpcResult result = ec2Client.createVpc(request);
+        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(result.getVpc().getVpcId());
+        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        ec2Client.createTags(tagNameRequest);
         ModifyVpcAttributeRequest requestDNS = new ModifyVpcAttributeRequest()
                 .withEnableDnsHostnames(true).withVpcId(result.getVpc().getVpcId());
         ec2Client.modifyVpcAttribute(requestDNS);
@@ -317,26 +321,59 @@ public class EC2Infrastructure {
     }
 
     /**
-     * Create internet gatway
+     * Create internet gateway
+     * @param name the name the of the internet gateway
      * @param vpcId the VPC which wants to connect to internet
      * @return internet gateway id
      */
-    public String  createInternetGateway(String vpcId) {
+    public String  createInternetGateway(String name, String vpcId) {
         CreateInternetGatewayResult result = ec2Client.createInternetGateway(new CreateInternetGatewayRequest());
         AttachInternetGatewayRequest request = new AttachInternetGatewayRequest().withInternetGatewayId(result.getInternetGateway().getInternetGatewayId()).withVpcId(vpcId);
         ec2Client.attachInternetGateway(request);
-        return result.getInternetGateway().getInternetGatewayId();
+        String igwId = result.getInternetGateway().getInternetGatewayId();
+        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(igwId);
+        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        return igwId;
     }
 
     /**
-     * add an external  route to the route table.
+     * add a tag Name with the name value to the new route created in vpcId and witout name.
+     * @param name name of the route
+     * @param vpcId the vpcid in which the route table reside
+     * @return this to be chained
+     */
+    public EC2Infrastructure addTagNameToNewCreatedRouteTable(String name, String vpcId) {
+        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("vpc-id").withValues(vpcId));
+        List<RouteTable> routes = ec2Client.describeRouteTables(request1).getRouteTables();
+        int index = 0;
+        for (int i=0 ; i < routes.size(); i++) {
+            for (Tag tag :routes.get(i).getTags()) {
+                if ("Name".equals(tag.getKey())) {
+                    index = -1;
+                    break;
+                }
+            }
+            if( index == 0) {
+                index = i;
+                break;
+            }
+        }
+        String id = routes.get(index).getRouteTableId();
+        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(id);
+        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        ec2Client.createTags(tagNameRequest);
+        return this;
+    }
+
+    /**
+     * add an external route to the route table to the internet gateway.
      * @param address address
      * @param internetGatewayId internet gateway id
-     * @param vpcId the VPC id
+     * @param name of the route table
      * @return this to be chained.
      */
-    public EC2Infrastructure addRouteToRouteTable(String address, String internetGatewayId, String vpcId) {
-        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("vpc-id").withValues(vpcId));
+    public EC2Infrastructure addRouteToRouteTableToInternetGatewayId(String address, String internetGatewayId, String name) {
+        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("tag:Name").withValues(name));
         String id = ec2Client.describeRouteTables(request1).getRouteTables().get(0).getRouteTableId();
         CreateRouteRequest requestRoute = new CreateRouteRequest();
         requestRoute.withRouteTableId(id).withDestinationCidrBlock(address).withGatewayId(internetGatewayId);
@@ -345,16 +382,84 @@ public class EC2Infrastructure {
     }
 
     /**
+     * add an external route to the route table to the internet gateway.
+     * @param address address
+     * @param natGatewayId internet gateway id
+     * @param name of the route table
+     * @return this to be chained.
+     */
+    public EC2Infrastructure addRouteToRouteTableToNatGatewayId(String address, String natGatewayId, String name) {
+        DescribeNatGatewaysRequest natGatewaysRequest = new DescribeNatGatewaysRequest().withNatGatewayIds(natGatewayId);
+        DescribeNatGatewaysResult result;
+        do {
+            result = ec2Client.describeNatGateways(natGatewaysRequest);
+            if (result.getNatGateways().size() == 0) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+
+                }
+            }
+        } while (!(result.getNatGateways().size() == 1 && result.getNatGateways().get(0).getState().equals(NatGatewayState.Available.toString())));
+        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("tag:Name").withValues(name));
+        String id = ec2Client.describeRouteTables(request1).getRouteTables().get(0).getRouteTableId();
+        CreateRouteRequest requestRoute = new CreateRouteRequest();
+        requestRoute.withRouteTableId(id).withDestinationCidrBlock(address).withNatGatewayId(natGatewayId);
+        ec2Client.createRoute(requestRoute);
+        return this;
+    }
+
+    /**
      * Assign a subnet to the Route Table
      * @param subnetId the subnet id to be assigned
-     * @param vpcId the vpcId
+     * @param name of the route table
      * @return this to be chained
      */
-    public EC2Infrastructure assignSubnetToRouteTable(String subnetId, String vpcId) {
-        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("vpc-id").withValues(vpcId));
+    public EC2Infrastructure assignSubnetToRouteTable(String subnetId, String name) {
+        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("tag:Name").withValues(name));
         String id = ec2Client.describeRouteTables(request1).getRouteTables().get(0).getRouteTableId();
         AssociateRouteTableRequest request = new AssociateRouteTableRequest().withRouteTableId(id).withSubnetId(subnetId);
         ec2Client.associateRouteTable(request);
         return this;
+    }
+
+    /**
+     * Create a new route table into a vpc
+     * @param name name of the route table
+     * @param vpcId the vpcid in which the route table is reside
+     * @return this to be chained
+     */
+    public EC2Infrastructure createRouteTable(String name, String vpcId) {
+        CreateRouteTableRequest request = new CreateRouteTableRequest().withVpcId(vpcId);
+        CreateRouteTableResult result = ec2Client.createRouteTable(request);
+        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(result.getRouteTable().getRouteTableId());
+        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        ec2Client.createTags(tagNameRequest);
+        return this;
+    }
+
+    /**
+     * Create ElasticIpAddress.
+     * @return the id of the allocated elastic Ip address
+     */
+    public String createElasticIpAddressOnVpc() {
+        AllocateAddressRequest request = new AllocateAddressRequest().withDomain(DomainType.Vpc);
+        return ec2Client.allocateAddress(request).getAllocationId();
+    }
+
+    /**
+     * Careate a network gateway in a subnet using an elastic Ip address.
+     * @param name the name of the nat gateway
+     * @param subnetId the subnet association
+     * @param elasticIpId the elastic Ip address
+     * @return the nat gateway id
+     */
+    public String createNatGateway(String name, String subnetId, String elasticIpId) {
+        CreateNatGatewayRequest natRequest = new CreateNatGatewayRequest().withSubnetId(subnetId).withAllocationId(elasticIpId);
+        String natGatewayId =  ec2Client.createNatGateway(natRequest).getNatGateway().getNatGatewayId();
+        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(natGatewayId);
+        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        ec2Client.createTags(tagNameRequest);
+        return natGatewayId;
     }
 }
