@@ -3,13 +3,12 @@ aws examples and pocs
 
 The amazon key-pair from the csv file should be saved into the c:\users\user\.aws\credentials with the following format:
 
-# Move this credentials file to (~/.aws/credentials)
-# after you fill in your access and secret keys in the default profile
-# WARNING: To avoid accidental leakage of your credentials,
-#          DO NOT keep this file in your source directory.
 [default]
+
 aws_access_key_id= key_id from csv
+
 aws_secret_access_key= access_key from cvs
+
 
 Into the projects/pharma there is the project to create a pharmaceutical site:
 - it will create authomatically key-pair and save on D:\keypair-name.pem to be used for ssh
