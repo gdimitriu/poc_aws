@@ -41,6 +41,10 @@ public class S3Infrastructure {
                 .withRegion(region).build();
     }
 
+    public S3Infrastructure(AmazonS3 client) {
+        this.s3client = client;
+    }
+
     /**
      * Create a bucket with the specific name into the region.
      * @param bucketName the name of the bucket

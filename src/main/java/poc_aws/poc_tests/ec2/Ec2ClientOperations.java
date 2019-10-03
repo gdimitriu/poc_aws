@@ -291,4 +291,23 @@ public class Ec2ClientOperations {
             nextToken = response.getNextToken();
         } while (nextToken != null);
     }
+
+    public void addEbsToEc2Instance(String instanceId, String volumeId) {
+
+    }
+
+    /**
+     * Create EBS volume to be attached to a instance.
+     * @param name name of the ebs volume
+     * @param availabilityZone the availability zone
+     * @param size the size of the new volume
+     * @param volumeType the type of the volume
+     * @return volume Id
+     */
+    public String createEbsVolume(String name, String availabilityZone, int size, VolumeType volumeType) {
+        CreateVolumeRequest volumeRequest = new CreateVolumeRequest();
+        volumeRequest.withAvailabilityZone(availabilityZone).withSize(size).withVolumeType(volumeType);
+        volumeRequest.withTagSpecifications(new TagSpecification().withTags(new Tag().withKey("Name").withValue(name)));
+        return ec2Client.createVolume(volumeRequest).getVolume().getVolumeId();
+    }
 }

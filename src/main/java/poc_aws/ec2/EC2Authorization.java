@@ -30,6 +30,8 @@ import com.amazonaws.services.ec2.model.*;
 import com.amazonaws.services.identitymanagement.AmazonIdentityManagement;
 import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClientBuilder;
 import com.amazonaws.services.identitymanagement.model.*;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -44,6 +46,9 @@ public class EC2Authorization {
 
     /** aim client  */
     private AmazonIdentityManagement aimClient;
+
+    /** the client for the Amazon storage */
+    private AmazonS3 s3client;
 
     private static String EC2_FULL_S3 = "{"+
             "    \"Version\": \"2012-10-17\","+
@@ -64,6 +69,8 @@ public class EC2Authorization {
                 .withRegion(region).build();
         aimClient = AmazonIdentityManagementClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
                 .withRegion("AWS_GLOBAL").build();
+        s3client = AmazonS3ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
+                .withRegion(region).build();
     }
 
     /**
@@ -72,6 +79,14 @@ public class EC2Authorization {
      */
     public AmazonEC2 getEc2Client() {
         return this.ec2Client;
+    }
+
+    /**
+     * get the S3Client
+     * @return s3Client
+     */
+    public AmazonS3 getS3Client() {
+        return this.s3client;
     }
 
     /**

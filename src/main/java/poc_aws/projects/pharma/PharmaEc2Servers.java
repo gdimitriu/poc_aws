@@ -57,11 +57,15 @@ public class PharmaEc2Servers {
     private static final String VPC_NAME = "PharmaVPC";
 
     private static final String PUBLIC_ROUTE_TABLE_NAME = "PubicPharmaRT";
-    private static final String PRIVATE_ROUTE_TABLE_NAME = "PrivatePharmaRT";
+    private static final String PRIVATE_ROUTE_TABLE_NAME1 = "PrivatePharmaRT1";
+    private static final String PRIVATE_ROUTE_TABLE_NAME2 = "PrivatePharmaRT2";
 
     private static final String INTERNET_GATEWAY_NAME = "IgwPharma";
-    private static final String NAT_GATEWAY_NAME = "NatPharma";
-    private static final String EIP_NAME = "eilpPharma";
+    private static final String NAT_GATEWAY_NAME1 = "NatPharma1";
+    private static final String EIP_NAME1 = "eilpPharma1";
+
+    private static final String NAT_GATEWAY_NAME2 = "NatPharma2";
+    private static final String EIP_NAME2 = "eilpPharma2";
 
     private static final String AZ_1 = "us-east-1a";
     private static final String AZ_2 = "us-east-1b";
@@ -90,9 +94,9 @@ public class PharmaEc2Servers {
             "sudo unzip web.zip -d /var/www/html/\n" +
             "rm web.zip\n" +
             "aws s3 cp s3://" + ROOT_BUCKET_DELIVERY_NAME + "/pharma_webservers/welcome.conf welcome.conf\n" +
-            "sudo cp welcome.conf /etc/httpd/conf.d/" +
+            "sudo cp welcome.conf /etc/httpd/conf.d/\n" +
             "rm welcome.conf\n" +
-            "sudo /etc/init.d/httpd start";
+            "sudo /etc/init.d/httpd start\n";
 
     /** Install script for the second web server */
     private static final String INSTALL_SCRIPT_2="#!/bin/bash\n" +
@@ -105,9 +109,9 @@ public class PharmaEc2Servers {
             "sudo unzip web.zip -d /var/www/html/\n" +
             "rm web.zip\n" +
             "aws s3 cp s3://" + ROOT_BUCKET_DELIVERY_NAME + "/pharma_webservers/welcome.conf welcome.conf\n" +
-            "sudo cp welcome.conf /etc/httpd/conf.d/" +
+            "sudo cp welcome.conf /etc/httpd/conf.d/\n" +
             "rm welcome.conf\n" +
-            "sudo /etc/init.d/httpd start";
+            "sudo /etc/init.d/httpd start\n";
 
     private static final String EC2_FULL_ACCESS_TO_S3 = "EC2_WITH_S3";
     private PharmaEc2Servers() {
@@ -115,7 +119,7 @@ public class PharmaEc2Servers {
         //create the role and instance profile for access to S3.
         ec2Authorization.createEC2S3FullRoleAndProfile(EC2_FULL_ACCESS_TO_S3);
         //upload the webservers on S3.
-        s3Infrastructure = new S3Infrastructure(Regions.US_EAST_1);
+        s3Infrastructure = new S3Infrastructure(ec2Authorization.getS3Client());
         s3Infrastructure.uploadNewFileToBucket(ROOT_BUCKET_DELIVERY_NAME, "pharma_webservers/pharma_web1.zip", "pharma_webservers/web1.zip");
         s3Infrastructure.uploadNewFileToBucket(ROOT_BUCKET_DELIVERY_NAME, "pharma_webservers/pharma_web2.zip", "pharma_webservers/web2.zip");
         s3Infrastructure.uploadNewFileToBucket(ROOT_BUCKET_DELIVERY_NAME, "pharma_webservers/welcome.conf", "pharma_webservers/welcome.conf");
@@ -146,6 +150,34 @@ public class PharmaEc2Servers {
         ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_2, AZ_2, PHARMA_SUBNET_2_NAME );
         ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_3, AZ_1 , PHARMA_SUBNET_3_NAME);
         ec2Infrastructure.addSubnet(vpcId,PHARMA_SUBNET_4, AZ_2 , PHARMA_SUBNET_4_NAME);
+
+        //create the internet gateway
+        String igId = ec2Infrastructure.createInternetGateway(INTERNET_GATEWAY_NAME, vpcId);
+        ec2Infrastructure.addTagNameToNewCreatedRouteTable(PUBLIC_ROUTE_TABLE_NAME , vpcId);
+        ec2Infrastructure.addRouteToRouteTableToInternetGatewayId("0.0.0.0/0", igId, PUBLIC_ROUTE_TABLE_NAME);
+        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), PUBLIC_ROUTE_TABLE_NAME);
+        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), PUBLIC_ROUTE_TABLE_NAME);
+
+        //create the elastic ip addresses for the backend
+        String elasticIpId = ec2Infrastructure.createElasticIpAddressOnVpc(EIP_NAME1);
+        String elasticIpId1 = ec2Infrastructure.createElasticIpAddressOnVpc(EIP_NAME2);
+        //create the NATs for the backend
+        String natGateway1 = ec2Infrastructure.createNatGateway(NAT_GATEWAY_NAME1, ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), elasticIpId);
+        String natGateway2 = ec2Infrastructure.createNatGateway(NAT_GATEWAY_NAME2, ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), elasticIpId1);
+        //create the private route table and associations
+        ec2Infrastructure.createRouteTable(PRIVATE_ROUTE_TABLE_NAME1, vpcId);
+        ec2Infrastructure.addRouteToRouteTableToNatGatewayId("0.0.0.0/0", natGateway1, PRIVATE_ROUTE_TABLE_NAME1);
+        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), PRIVATE_ROUTE_TABLE_NAME1);
+        //we could not have two 0.0.0.0/0 route in the same route table so we have to create two.
+        ec2Infrastructure.createRouteTable(PRIVATE_ROUTE_TABLE_NAME2, vpcId);
+        ec2Infrastructure.addRouteToRouteTableToNatGatewayId("0.0.0.0/0", natGateway2, PRIVATE_ROUTE_TABLE_NAME2);
+        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), PRIVATE_ROUTE_TABLE_NAME2);
+
+        //create the load balancer
+        ec2Infrastructure.addListnerToLoadBalancer(LOAD_BALANCER_NAME, "HTTP", 80, "HTTP", 80);
+        ec2Infrastructure.createLoadBalancer(LOAD_BALANCER_NAME, true,  Arrays.asList(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1),
+                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2)), ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME));
+
         //create web machines
         String w1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), INSTALL_SCRIPT_1, "WebInstance1",EC2_FULL_ACCESS_TO_S3);
@@ -156,25 +188,7 @@ public class PharmaEc2Servers {
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null, "DBInstance1", EC2_FULL_ACCESS_TO_S3);
         String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null, "DBInstance2", EC2_FULL_ACCESS_TO_S3);
-
-        String igId = ec2Infrastructure.createInternetGateway(INTERNET_GATEWAY_NAME, vpcId);
-        ec2Infrastructure.addTagNameToNewCreatedRouteTable(PUBLIC_ROUTE_TABLE_NAME , vpcId);
-        ec2Infrastructure.addRouteToRouteTableToInternetGatewayId("0.0.0.0/0", igId, PUBLIC_ROUTE_TABLE_NAME);
-        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), PUBLIC_ROUTE_TABLE_NAME);
-        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), PUBLIC_ROUTE_TABLE_NAME);
-
-        //create the NAT
-        String elasticIpId = ec2Infrastructure.createElasticIpAddressOnVpc(EIP_NAME);
-
-        String natGateway1 = ec2Infrastructure.createNatGateway(NAT_GATEWAY_NAME, ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), elasticIpId);
-        ec2Infrastructure.createRouteTable(PRIVATE_ROUTE_TABLE_NAME, vpcId);
-        ec2Infrastructure.addRouteToRouteTableToNatGatewayId("0.0.0.0/0", natGateway1, PRIVATE_ROUTE_TABLE_NAME);
-        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), PRIVATE_ROUTE_TABLE_NAME);
-        ec2Infrastructure.assignSubnetToRouteTable(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), PRIVATE_ROUTE_TABLE_NAME);
-        //create the load balancer
-        ec2Infrastructure.addListnerToLoadBalancer(LOAD_BALANCER_NAME, "HTTP", 80, "HTTP", 80);
-        ec2Infrastructure.createLoadBalancer(LOAD_BALANCER_NAME, true,  Arrays.asList(ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1),
-                ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2)), ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME));
+        //add web machines to load balancer
         ec2Infrastructure.addInstacesToLB(LOAD_BALANCER_NAME,Arrays.asList(w1Id, w2Id));
 
 

@@ -333,6 +333,7 @@ public class EC2Infrastructure {
         String igwId = result.getInternetGateway().getInternetGatewayId();
         CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(igwId);
         tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        ec2Client.createTags(tagNameRequest);
         return igwId;
     }
 
