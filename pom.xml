@@ -74,8 +74,6 @@
             <artifactId>aws-java-sdk-iam</artifactId>
             <version>${aws.version}</version>
         </dependency>
-
-
         <!-- java 11 dependencies for jaxb -->
         <dependency>
             <groupId>javax.xml.bind</groupId>

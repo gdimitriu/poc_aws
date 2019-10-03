@@ -27,6 +27,7 @@ import com.amazonaws.regions.Regions;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
 import com.amazonaws.services.ec2.model.*;
+import com.amazonaws.util.EC2MetadataUtils;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -61,10 +62,12 @@ public class Ec2ClientOperations {
         System.out.println("Reserved instances!");
         client.printAllInstances();
         System.out.println("Try to start new instance!");
-        String instanceId = client.runInstance("ami-00eb20669e0990cb4", InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_NAME);
+        String instanceId = client.runInstance("MyInstance", "ami-00eb20669e0990cb4", InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_NAME);
         System.out.println("Launched successfully the instance!");
         System.out.println("Reserved instances!");
         client.printAllInstances();
+        String ebsId = client.createEbsVolume("MyVolume",client.getAvailabilityZone(instanceId), 2, VolumeType.Gp2);
+        client.addEbsToEc2Instance(instanceId,ebsId, "/dev/sdh");
         System.out.println("Don't forget to terminate the instances!!! if you don't choose terminate");
         System.out.println("Wait for the user command: terminate, stop, relaunch, start, quit");
         Scanner sc = new Scanner(System.in);
@@ -87,7 +90,7 @@ public class Ec2ClientOperations {
                     break;
                 case "relaunch":
                     client.terminateInstance(instanceId);
-                    instanceId = client.runInstance("ami-00eb20669e0990cb4", InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_NAME);
+                    instanceId = client.runInstance("MySecondInstance", "ami-00eb20669e0990cb4", InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_NAME);
                     break;
             }
         } while(!"quit".equals(userChoice));
@@ -211,6 +214,7 @@ public class Ec2ClientOperations {
 
     /**
      * Run a specific instance
+     * @param name  the name of the instance
      * @param osType the type of the image (OS)
      * @param type type of the instance (T2.micro for the Siplilearn account)
      * @param min minimum number of instances
@@ -219,11 +223,15 @@ public class Ec2ClientOperations {
      * @param securityGroup the security group assigned to this instance
      * @return string representing the instance id
      */
-    public String runInstance(String osType, InstanceType type, int min, int max, String keyName, String securityGroup) {
+    public String runInstance(String name, String osType, InstanceType type, int min, int max, String keyName, String securityGroup) {
         RunInstancesRequest request = new RunInstancesRequest();
         request.withImageId(osType).withInstanceType(type).withMinCount(min).withMaxCount(max).withKeyName(keyName).withSecurityGroups(securityGroup);
         RunInstancesResult result = ec2Client.runInstances(request);
-        return result.getReservation().getInstances().get(0).getInstanceId();
+        String instanceId = result.getReservation().getInstances().get(0).getInstanceId();
+        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(instanceId);
+        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        ec2Client.createTags(tagNameRequest);
+        return instanceId;
     }
 
     /**
@@ -292,8 +300,15 @@ public class Ec2ClientOperations {
         } while (nextToken != null);
     }
 
-    public void addEbsToEc2Instance(String instanceId, String volumeId) {
-
+    public void addEbsToEc2Instance(String instanceId, String volumeId, String deviceName) {
+        DescribeInstancesRequest request = new DescribeInstancesRequest().withInstanceIds(instanceId);
+        DescribeInstancesResult response;
+        do {
+            response = ec2Client.describeInstances(request);
+        } while(response.getReservations().get(0).getInstances().get(0).getState().getCode() != 16);
+        AttachVolumeRequest requestAttach = new AttachVolumeRequest().withInstanceId(instanceId).withVolumeId(volumeId);
+        requestAttach.withDevice(deviceName);
+        ec2Client.attachVolume(requestAttach);
     }
 
     /**
@@ -307,7 +322,16 @@ public class Ec2ClientOperations {
     public String createEbsVolume(String name, String availabilityZone, int size, VolumeType volumeType) {
         CreateVolumeRequest volumeRequest = new CreateVolumeRequest();
         volumeRequest.withAvailabilityZone(availabilityZone).withSize(size).withVolumeType(volumeType);
-        volumeRequest.withTagSpecifications(new TagSpecification().withTags(new Tag().withKey("Name").withValue(name)));
-        return ec2Client.createVolume(volumeRequest).getVolume().getVolumeId();
+        String volumeId = ec2Client.createVolume(volumeRequest).getVolume().getVolumeId();
+        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(volumeId);
+        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        ec2Client.createTags(tagNameRequest);
+        return volumeId;
+    }
+
+    public String getAvailabilityZone(String instanceId) {
+        DescribeInstancesRequest request = new DescribeInstancesRequest().withInstanceIds(instanceId);
+        DescribeInstancesResult response = ec2Client.describeInstances(request);
+        return response.getReservations().get(0).getInstances().get(0).getPlacement().getAvailabilityZone();
     }
 }
