@@ -29,6 +29,7 @@ import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
 import com.amazonaws.services.sqs.model.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 
 public class SQSClientOperations {
@@ -37,8 +38,8 @@ public class SQSClientOperations {
     private AmazonSQS sqsClient;
     public static void main(String...args) {
         SQSClientOperations client = new SQSClientOperations();
-        String queueUrl = client.createStandardQueue("MyQueue", 5, 86400);
-        System.out.println("commands:deleteQueue, readAll, send:<message>, deleteReadMessages quit");
+        String queueUrl = null;
+        System.out.println("commands: createSt, createFifo, deleteQueue, readAll, send:<message>, deleteReadMessages, quit");
         Scanner sc = new Scanner(System.in);
         String userChoice;
         List<Message> messages = null;
@@ -47,12 +48,25 @@ public class SQSClientOperations {
             switch (userChoice){
                 case "deleteQueue":
                     client.deleteQeueue(queueUrl);
+                    queueUrl = null;
                     break;
                 case "readAll":
                     messages = client.readAndPrintAll(queueUrl);
                     break;
                 case "deleteReadMessages":
                     client.deleteMessages(queueUrl, messages);
+                    break;
+                case "createSt":
+                    if (queueUrl != null) {
+                        client.deleteQeueue(queueUrl);
+                    }
+                    queueUrl = client.createStandardQueue("MyQueue", 5, 86400);
+                    break;
+                case "createFifo":
+                    if (queueUrl != null) {
+                        client.deleteQeueue(queueUrl);
+                    }
+                    queueUrl = client.createFifoQueue("MyQueue", 5, 86400);
                     break;
             }
             if (userChoice.startsWith("send:")) {
@@ -82,6 +96,22 @@ public class SQSClientOperations {
     }
 
     /**
+     * Create a fifo queue.
+     * @param name the queue name
+     * @param delay the delay
+     * @param retentionPeriod  the retention period
+     * @return queue url
+     */
+    public String createFifoQueue(String name, int delay, int retentionPeriod) {
+        CreateQueueRequest request = new CreateQueueRequest(name + ".fifo")
+                .addAttributesEntry("DelaySeconds", Integer.toString(delay))
+                .addAttributesEntry("MessageRetentionPeriod", Integer.toString(retentionPeriod))
+                .addAttributesEntry("ContentBasedDeduplication", "true")
+                .addAttributesEntry("FifoQueue", "true");
+        return sqsClient.createQueue(request).getQueueUrl();
+    }
+
+    /**
      * delete a sqs queue
      * @param queueUrl name of the queue to be deleted
      */
@@ -96,7 +126,15 @@ public class SQSClientOperations {
      * @param message the message to be send
      */
     public void sendMessage(String queueUrl, String message) {
+        GetQueueAttributesRequest description = new GetQueueAttributesRequest().withQueueUrl(queueUrl).withAttributeNames("FifoQueue");
+        Map<String, String>  attributes = sqsClient.getQueueAttributes(description).getAttributes();
         SendMessageRequest request = new SendMessageRequest().withMessageBody(message).withQueueUrl(queueUrl);
+        if (attributes.containsKey("FifoQueue")) {
+            if (attributes.get("FifoQueue").equals("true")) {
+                request.withMessageGroupId("awk.test");
+            }
+        }
+
         sqsClient.sendMessage(request);
     }
 

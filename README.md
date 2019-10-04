@@ -20,7 +20,8 @@ Into the projects/pharma there is the project to create a pharmaceutical site:
 - each database instance has a NAT assigned to a elastic IP address
 - Internet gateway for the web servers to be available from outside
 
-Into the poc_tests are diffent small test for the amazon services:
-- ec2 : creation, start, stop, adding ebs(not yet functional).
+Into the poc_tests are different small test for the amazon services:
+- ec2 : creation, start, stop, adding ebs(not yet mounted on instance just attached).
 - aim to create a role
 - s3 to create a web site.
+- sqs to create queue and exchange messages
