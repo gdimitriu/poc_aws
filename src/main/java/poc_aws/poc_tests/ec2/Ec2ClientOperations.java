@@ -300,6 +300,12 @@ public class Ec2ClientOperations {
         } while (nextToken != null);
     }
 
+    /**
+     * attach ebs to ec2 instance
+     * @param instanceId the id of the host instance
+     * @param volumeId the volume to be attached
+     * @param deviceName the device name /dev/xvdf etc
+     */
     public void addEbsToEc2Instance(String instanceId, String volumeId, String deviceName) {
         DescribeInstancesRequest request = new DescribeInstancesRequest().withInstanceIds(instanceId);
         DescribeInstancesResult response;
