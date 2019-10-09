@@ -11,7 +11,7 @@ aws_secret_access_key= access_key from cvs
 
 
 Into the projects/pharma there is the project to create a pharmaceutical site:
-- it will create authomatically key-pair and save on D:\keypair-name.pem to be used for ssh
+- it will create automatically key-pair and save on D:\keypair-name.pem to be used for ssh
 - all except load balancer are into a private virtual cloud
 - the webserver site are distributed on S3
 - two web servers into two availability zones which will take the site from S3
@@ -20,8 +20,20 @@ Into the projects/pharma there is the project to create a pharmaceutical site:
 - each database instance has a NAT assigned to a elastic IP address
 - Internet gateway for the web servers to be available from outside
 
+Into the projects/sns_with_sqs
+- it will create at demand a topic
+- it will create at demand a queue
+- it will subscribe at demand the queue the topic
+- it will publish at demand a message to the topic which will send automatically to the queue
+- it will read at demand the messages from the queue, print and then delete them
+- it will delete the created subscription with unsubscribe command at demand
+- it will delete the created topic at demand
+- it will delete the create queue at demand
+- it will cleanUp the created resources at demand
+
 Into the poc_tests are different small test for the amazon services:
 - ec2 : creation, start, stop, adding ebs(not yet mounted on instance just attached).
 - aim to create a role
 - s3 to create a web site.
 - sqs to create queue and exchange messages
+- sns to create topic and publish messages
