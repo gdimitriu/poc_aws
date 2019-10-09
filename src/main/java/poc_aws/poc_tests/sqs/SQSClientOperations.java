@@ -47,7 +47,9 @@ public class SQSClientOperations {
             userChoice = sc.nextLine();
             switch (userChoice){
                 case "deleteQueue":
-                    client.deleteQeueue(queueUrl);
+                    if (queueUrl != null) {
+                        client.deleteQeueue(queueUrl);
+                    }
                     queueUrl = null;
                     break;
                 case "readAll":
