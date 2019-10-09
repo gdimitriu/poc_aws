@@ -48,8 +48,8 @@ public class AIMClientOperations {
     public static void main(String...args) {
         AIMClientOperations client = new AIMClientOperations();
         client.describeRole();
-//        client.createRoleS3();
-//        client.attachRolePolicy();
+        client.createRoleS3();
+        client.attachRolePolicy();
     }
 
     /**
