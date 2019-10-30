@@ -1,7 +1,7 @@
 # poc_aws
 aws examples and pocs
 
-The amazon key-pair from the csv file should be saved into the c:\users\user\.aws\credentials with the following format:
+The amazon key-pair from the csv file should be saved into the c:\users\user\\.aws\credentials with the following format:
 
 [default]
 
