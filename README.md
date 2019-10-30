@@ -19,6 +19,8 @@ Into the projects/pharma there is the project to create a pharmaceutical site:
 - two databases (not populated yet)
 - each database instance has a NAT assigned to a elastic IP address
 - Internet gateway for the web servers to be available from outside
+- The automatic created structure is :
+![Alt text](documentations/pharma.png?raw=true "Pharma")
 
 Into the projects/sns_with_sqs
 - it will create at demand a topic
