@@ -2,9 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="1a2c5c46-0020-439a-9430-37fa6415067f" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/../src/main/java/poc_aws/poc_tests/ec2/EC2InfrastructureRequests.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../README.md" beforeDir="false" afterPath="$PROJECT_DIR$/../README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/poc_aws/poc_tests/ec2/EC2InfrastructureRequests.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/poc_aws/projects/pharma/EC2InfrastructureRequests.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/poc_aws/poc_tests/ec2/Ec2ClientOperations.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/poc_aws/poc_tests/ec2/Ec2ClientOperations.java" afterDir="false" />
     </list>
     <ignored path="$PROJECT_DIR$/out/" />
     <ignored path="$PROJECT_DIR$/target/" />
