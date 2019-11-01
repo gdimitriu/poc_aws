@@ -31,13 +31,15 @@ import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingCli
 import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
 import com.amazonaws.services.elasticloadbalancing.model.LoadBalancerDescription;
 import com.amazonaws.services.elasticloadbalancing.model.RegisterInstancesWithLoadBalancerRequest;
-import poc_aws.ec2.EC2Infrastructure;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
+import java.util.Scanner;
 import java.util.stream.Collectors;
 
 public class EC2InfrastructureRequests {
@@ -179,9 +181,7 @@ public class EC2InfrastructureRequests {
             return null;
         }
         List<String> securityGroupIds = new ArrayList<>();
-        for (GroupIdentifier group : instanceToClone.getSecurityGroups()) {
-            securityGroupIds.add(group.getGroupId());
-        }
+        instanceToClone.getSecurityGroups().stream().forEach(group -> securityGroupIds.add(group.getGroupId()));
         RunInstancesRequest request = new RunInstancesRequest().withMinCount(1).withMaxCount(1);
         request.withImageId(instanceToClone.getImageId()).withInstanceType(instanceToClone.getInstanceType()).withKeyName(instanceToClone.getKeyName());
         //do not work with security group and subnets.

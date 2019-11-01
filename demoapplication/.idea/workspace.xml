@@ -3,8 +3,7 @@
   <component name="ChangeListManager">
     <list default="true" id="1a2c5c46-0020-439a-9430-37fa6415067f" name="Default Changelist" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/main/java/poc_aws/poc_tests/ec2/EC2InfrastructureRequests.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/poc_aws/projects/pharma/EC2InfrastructureRequests.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../src/main/java/poc_aws/poc_tests/ec2/Ec2ClientOperations.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/poc_aws/poc_tests/ec2/Ec2ClientOperations.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../src/main/java/poc_aws/projects/pharma/EC2InfrastructureRequests.java" beforeDir="false" afterPath="$PROJECT_DIR$/../src/main/java/poc_aws/projects/pharma/EC2InfrastructureRequests.java" afterDir="false" />
     </list>
     <ignored path="$PROJECT_DIR$/out/" />
     <ignored path="$PROJECT_DIR$/target/" />
@@ -254,7 +253,6 @@
   </component>
   <component name="ToolWindowManager">
     <frame x="-8" y="-8" width="1936" height="1056" extended-state="7" />
-    <editor active="true" />
     <layout>
       <window_info id="Designer" order="0" />
       <window_info id="UI Designer" order="1" />
