@@ -21,6 +21,7 @@ Into the projects/pharma there is the project to create a pharmaceutical site:
 - Internet gateway for the web servers to be available from outside
 - The automatic created structure is :
 ![Alt text](documentations/pharma.png?raw=true "Pharma")
+- The EC2IfrastructureRequest is used to clone a webserver from one AZ to increase the load, it will be added also to the Load Balancer.
 
 Into the projects/sns_with_sqs
 - it will create at demand a topic
