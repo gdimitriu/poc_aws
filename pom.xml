@@ -22,13 +22,9 @@
         </pluginManagement>
     </build>
     <properties>
-        <!--<aws.version>2.10.14</aws.version>
+        <aws.version>2.10.0</aws.version>
         <aws.groupId>software.amazon.awssdk</aws.groupId>
-        <aws.prefix.artifactId/> -->
-        <aws.version>1.11.672</aws.version>
-        <aws.groupId>com.amazonaws</aws.groupId>
-        <aws.prefix.artifactId>aws-java-sdk-</aws.prefix.artifactId>
-
+        <aws.prefix.artifactId/>
     </properties>
     <dependencies>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-core -->
@@ -36,12 +32,6 @@
             <groupId>${aws.groupId}</groupId>
             <artifactId>${aws.prefix.artifactId}core</artifactId>
             <version>${aws.version}</version>
-        </dependency>
-        <!-- https://mvnrepository.com/artifact/com.amazonaws/amazon-sqs-java-messaging-lib -->
-        <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>amazon-sqs-java-messaging-lib</artifactId>
-            <version>1.0.6</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-s3 -->
         <dependency>
@@ -80,10 +70,15 @@
             <version>${aws.version}</version>
         </dependency>
 
-        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-iam -->
         <dependency>
             <groupId>${aws.groupId}</groupId>
-            <artifactId>aws-java-sdk-iam</artifactId>
+            <artifactId>${aws.prefix.artifactId}iam</artifactId>
+            <version>${aws.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>${aws.groupId}</groupId>
+            <artifactId>${aws.prefix.artifactId}auth</artifactId>
             <version>${aws.version}</version>
         </dependency>
         <!-- java 11 dependencies for jaxb -->
