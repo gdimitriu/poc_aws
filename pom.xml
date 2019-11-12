@@ -22,13 +22,19 @@
         </pluginManagement>
     </build>
     <properties>
-        <aws.version>1.11.590</aws.version>
+        <!--<aws.version>2.10.14</aws.version>
+        <aws.groupId>software.amazon.awssdk</aws.groupId>
+        <aws.prefix.artifactId/> -->
+        <aws.version>1.11.672</aws.version>
+        <aws.groupId>com.amazonaws</aws.groupId>
+        <aws.prefix.artifactId>aws-java-sdk-</aws.prefix.artifactId>
+
     </properties>
     <dependencies>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-core -->
         <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-core</artifactId>
+            <groupId>${aws.groupId}</groupId>
+            <artifactId>${aws.prefix.artifactId}core</artifactId>
             <version>${aws.version}</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/amazon-sqs-java-messaging-lib -->
@@ -39,44 +45,44 @@
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-s3 -->
         <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-s3</artifactId>
+            <groupId>${aws.groupId}</groupId>
+            <artifactId>${aws.prefix.artifactId}s3</artifactId>
             <version>${aws.version}</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-ec2 -->
         <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-ec2</artifactId>
+            <groupId>${aws.groupId}</groupId>
+            <artifactId>${aws.prefix.artifactId}ec2</artifactId>
             <version>${aws.version}</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sns -->
         <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-sns</artifactId>
+            <groupId>${aws.groupId}</groupId>
+            <artifactId>${aws.prefix.artifactId}sns</artifactId>
             <version>${aws.version}</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sqs -->
         <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-sqs</artifactId>
+            <groupId>${aws.groupId}</groupId>
+            <artifactId>${aws.prefix.artifactId}sqs</artifactId>
             <version>${aws.version}</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-mq -->
         <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-mq</artifactId>
+            <groupId>${aws.groupId}</groupId>
+            <artifactId>${aws.prefix.artifactId}mq</artifactId>
             <version>${aws.version}</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-elasticloadbalancing -->
         <dependency>
-            <groupId>com.amazonaws</groupId>
-            <artifactId>aws-java-sdk-elasticloadbalancing</artifactId>
+            <groupId>${aws.groupId}</groupId>
+            <artifactId>${aws.prefix.artifactId}elasticloadbalancing</artifactId>
             <version>${aws.version}</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-iam -->
         <dependency>
-            <groupId>com.amazonaws</groupId>
+            <groupId>${aws.groupId}</groupId>
             <artifactId>aws-java-sdk-iam</artifactId>
             <version>${aws.version}</version>
         </dependency>
