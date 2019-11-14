@@ -20,13 +20,13 @@
 
 package poc_aws.poc_tests.ec2;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
-import com.amazonaws.services.ec2.model.*;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.ec2.model.*;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -38,15 +38,15 @@ import java.util.Scanner;
 
 public class Ec2ClientOperations {
     /** ec2 client  */
-    private AmazonEC2 ec2Client;
+    private Ec2Client ec2Client;
     /** security group for EC2 */
-    private CreateSecurityGroupResult sgResult;
+    private CreateSecurityGroupResponse sgResult;
 
     private static final String KEY_PAIR_NAME="javaAutoKeyPair";
 
     private static final String SECURITY_GROUP_NAME = "MySecurityGroup";
 
-    private KeyPair keyPair;
+    private CreateKeyPairResponse keyPair;
 
     public static void main(String...args) {
         Ec2ClientOperations client = new Ec2ClientOperations();
@@ -61,11 +61,11 @@ public class Ec2ClientOperations {
         System.out.println("Reserved instances!");
         client.printAllInstances();
         System.out.println("Try to start new instance!");
-        String instanceId = client.runInstance("MyInstance", "ami-00eb20669e0990cb4", InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_NAME);
+        String instanceId = client.runInstance("MyInstance", "ami-00eb20669e0990cb4", InstanceType.T2_MICRO, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_NAME);
         System.out.println("Launched successfully the instance!");
         System.out.println("Reserved instances!");
         client.printAllInstances();
-        String ebsId = client.createEbsVolume("MyVolume",client.getAvailabilityZone(instanceId), 2, VolumeType.Gp2);
+        String ebsId = client.createEbsVolume("MyVolume",client.getAvailabilityZone(instanceId), 2, VolumeType.GP2);
         client.addEbsToEc2Instance(instanceId,ebsId, "/dev/sdh");
         System.out.println("Don't forget to terminate the instances!!! if you don't choose terminate");
         System.out.println("Wait for the user command: terminate, stop, relaunch, start, quit");
@@ -80,8 +80,8 @@ public class Ec2ClientOperations {
                 case "stop":
                     try {
                         client.stopInstance(instanceId, true);
-                    } catch (AmazonEC2Exception ex) {
-                        System.out.println("Error stopping instance : "  + ex.getErrorCode());
+                    } catch (Ec2Exception ex) {
+                        System.out.println("Error stopping instance : "  + ex.awsErrorDetails());
                     }
                     break;
                 case "start":
@@ -89,7 +89,7 @@ public class Ec2ClientOperations {
                     break;
                 case "relaunch":
                     client.terminateInstance(instanceId);
-                    instanceId = client.runInstance("MySecondInstance", "ami-00eb20669e0990cb4", InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_NAME);
+                    instanceId = client.runInstance("MySecondInstance", "ami-00eb20669e0990cb4", InstanceType.T2_MICRO, 1, 1, KEY_PAIR_NAME, SECURITY_GROUP_NAME);
                     break;
             }
         } while(!"quit".equals(userChoice));
@@ -99,9 +99,10 @@ public class Ec2ClientOperations {
      * Default constructor.
      */
     public Ec2ClientOperations() {
-        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        ec2Client = AmazonEC2ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
-                .withRegion(Regions.US_EAST_1).build();
+        AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
+        ec2Client = Ec2Client.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .region(Region.US_EAST_1)
+                .httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
     /**
@@ -110,12 +111,12 @@ public class Ec2ClientOperations {
      * @return true if the security group exists
      */
     public boolean isSecurityGroupCreated(String sgName) {
-        DescribeSecurityGroupsRequest request = new
-                DescribeSecurityGroupsRequest().withGroupNames(sgName);
+        DescribeSecurityGroupsRequest request =
+                DescribeSecurityGroupsRequest.builder().groupNames(sgName).build();
         try {
-            DescribeSecurityGroupsResult result = ec2Client.describeSecurityGroups(request);
-            return result.getSecurityGroups().stream().map(SecurityGroup::getGroupName).anyMatch(str -> str.equals(sgName));
-        } catch (AmazonEC2Exception e) {
+            DescribeSecurityGroupsResponse result = ec2Client.describeSecurityGroups(request);
+            return result.securityGroups().stream().map(SecurityGroup::groupName).anyMatch(str -> str.equals(sgName));
+        } catch (Ec2Exception e) {
             return false;
         }
     }
@@ -131,8 +132,7 @@ public class Ec2ClientOperations {
             System.out.println("SG with name=" + name + " is already created we will just add securities");
             return false;
         }
-        CreateSecurityGroupRequest sgRequest = new CreateSecurityGroupRequest();
-        sgRequest.withGroupName(name).withDescription(description);
+        CreateSecurityGroupRequest sgRequest = CreateSecurityGroupRequest.builder().groupName(name).description(description).build();
         sgResult = ec2Client.createSecurityGroup(sgRequest);
         return true;
     }
@@ -147,17 +147,17 @@ public class Ec2ClientOperations {
      * @return  true if it could add the firewall rule
      */
     public boolean addFirewallRule(String securityGroupName, List<String> ipRangesStr, String protocol, int fromPort, int toPort) {
-        IpPermission ipPermission = new IpPermission();
+
         List<IpRange> ipRanges = new ArrayList<>();
-        ipRangesStr.forEach(a -> ipRanges.add(new IpRange().withCidrIp(a)));
-        ipPermission.withIpv4Ranges(ipRanges).withIpProtocol(protocol).withFromPort(fromPort).withToPort(toPort);
-        AuthorizeSecurityGroupIngressRequest authorizeSecurityGroupIngressRequest = new AuthorizeSecurityGroupIngressRequest();
-        authorizeSecurityGroupIngressRequest.withGroupName(securityGroupName).withIpPermissions(ipPermission);
+        ipRangesStr.forEach(a -> ipRanges.add(IpRange.builder().cidrIp(a).build()));
+        IpPermission ipPermission = IpPermission.builder().ipRanges(ipRanges).ipProtocol(protocol).fromPort(fromPort).toPort(toPort).build();
+        AuthorizeSecurityGroupIngressRequest authorizeSecurityGroupIngressRequest = AuthorizeSecurityGroupIngressRequest.builder()
+                .groupName(securityGroupName).ipPermissions(ipPermission).build();
         try {
             ec2Client.authorizeSecurityGroupIngress(authorizeSecurityGroupIngressRequest);
             return true;
-        } catch (AmazonEC2Exception e) {
-            if (e.getErrorCode().equals("InvalidPermission.Duplicate")) {
+        } catch (Ec2Exception e) {
+            if (e.awsErrorDetails().errorCode().equals("InvalidPermission.Duplicate")) {
                 System.out.println("Rule already exist for ipRange " + ipRangesStr + " on protocol " + protocol);
                 return true;
             }
@@ -174,20 +174,18 @@ public class Ec2ClientOperations {
     public void createKeyPair(String keyName, boolean force) {
         if (isKeyPairCreated(keyName) && force) {
             System.out.println("The existing keyPair " + keyName + " will be deleted and recreated!");
-            DeleteKeyPairRequest request = new DeleteKeyPairRequest().withKeyName(keyName);
+            DeleteKeyPairRequest request = DeleteKeyPairRequest.builder().keyName(keyName).build();
             try {
                 ec2Client.deleteKeyPair(request);
-            } catch (AmazonEC2Exception e) {
+            } catch (Ec2Exception e) {
                 e.printStackTrace();
                 return;
             }
        } else if (!force) {
             return;
         }
-        CreateKeyPairRequest request = new CreateKeyPairRequest();
-        request.withKeyName(keyName);
-        CreateKeyPairResult result = ec2Client.createKeyPair(request);
-        keyPair = result.getKeyPair();
+        CreateKeyPairRequest request = CreateKeyPairRequest.builder().keyName(keyName).build();
+        keyPair = ec2Client.createKeyPair(request);
     }
 
     /**
@@ -196,8 +194,8 @@ public class Ec2ClientOperations {
      * @return true if the key already exists.
      */
     public boolean isKeyPairCreated(String keyName) {
-        DescribeKeyPairsResult result = ec2Client.describeKeyPairs();
-        return result.getKeyPairs().stream().map(KeyPairInfo::getKeyName).anyMatch(str -> str.equals(keyName));
+        DescribeKeyPairsResponse result = ec2Client.describeKeyPairs();
+        return result.keyPairs().stream().map(KeyPairInfo::keyName).anyMatch(str -> str.equals(keyName));
     }
 
     /**
@@ -207,7 +205,7 @@ public class Ec2ClientOperations {
      */
     public void savePEMToFile(String fileName) throws IOException{
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName))) {
-            writer.write(keyPair.getKeyMaterial());
+            writer.write(keyPair.keyMaterial());
         }
     }
 
@@ -223,12 +221,12 @@ public class Ec2ClientOperations {
      * @return string representing the instance id
      */
     public String runInstance(String name, String osType, InstanceType type, int min, int max, String keyName, String securityGroup) {
-        RunInstancesRequest request = new RunInstancesRequest();
-        request.withImageId(osType).withInstanceType(type).withMinCount(min).withMaxCount(max).withKeyName(keyName).withSecurityGroups(securityGroup);
-        RunInstancesResult result = ec2Client.runInstances(request);
-        String instanceId = result.getReservation().getInstances().get(0).getInstanceId();
-        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(instanceId);
-        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        RunInstancesRequest request = RunInstancesRequest.builder()
+                .imageId(osType).instanceType(type).minCount(min).maxCount(max).keyName(keyName).securityGroups(securityGroup).build();
+        RunInstancesResponse result = ec2Client.runInstances(request);
+        String instanceId = result.instances().get(0).instanceId();
+        CreateTagsRequest tagNameRequest = CreateTagsRequest.builder().resources(instanceId)
+                .tags(Tag.builder().key("Name").value(name).build()).build();
         ec2Client.createTags(tagNameRequest);
         return instanceId;
     }
@@ -238,12 +236,11 @@ public class Ec2ClientOperations {
      * @param instanceId  the id of the instance to be stop
      * @param force true if the instance will be forcefully stoped.
      */
-    public void stopInstance(String instanceId, boolean force) throws  AmazonEC2Exception{
-        DescribeInstancesRequest describeRequest = new DescribeInstancesRequest().withInstanceIds(instanceId);
-        DescribeInstancesResult describeResult = ec2Client.describeInstances(describeRequest);
-        if (describeResult.getReservations().get(0).getInstances().get(0).getState().getCode() == 16) {
-            StopInstancesRequest stopRequest = new StopInstancesRequest();
-            stopRequest.withInstanceIds(instanceId).withForce(force);
+    public void stopInstance(String instanceId, boolean force) throws  Ec2Exception{
+        DescribeInstancesRequest describeRequest = DescribeInstancesRequest.builder().instanceIds(instanceId).build();
+        DescribeInstancesResponse describeResult = ec2Client.describeInstances(describeRequest);
+        if (describeResult.reservations().get(0).instances().get(0).state().code() == 16) {
+            StopInstancesRequest stopRequest = StopInstancesRequest.builder().instanceIds(instanceId).force(force).build();
             ec2Client.stopInstances(stopRequest);
         } else {
             System.out.printf("Instance with id %s is not running yet !\n", instanceId);
@@ -256,8 +253,7 @@ public class Ec2ClientOperations {
      * @param instanceId the id of the instance to be started
      */
     public void startInstance(String instanceId) {
-        StartInstancesRequest request = new StartInstancesRequest();
-        request.withInstanceIds(instanceId);
+        StartInstancesRequest request = StartInstancesRequest.builder().instanceIds(instanceId).build();
         ec2Client.startInstances(request);
     }
 
@@ -266,8 +262,7 @@ public class Ec2ClientOperations {
      * @param instanceId the id of the instance to be terminated
      */
     public void terminateInstance(String instanceId) {
-        TerminateInstancesRequest request = new TerminateInstancesRequest();
-        request.withInstanceIds(instanceId);
+        TerminateInstancesRequest request = TerminateInstancesRequest.builder().instanceIds(instanceId).build();
         ec2Client.terminateInstances(request);
     }
 
@@ -277,25 +272,25 @@ public class Ec2ClientOperations {
     private void printAllInstances() {
         String nextToken = null;
         do {
-            DescribeInstancesRequest request = new DescribeInstancesRequest().withMaxResults(6).withNextToken(nextToken);
-            DescribeInstancesResult response = ec2Client.describeInstances(request);
-            for (Reservation reservation : response.getReservations()) {
-                for (Instance instance : reservation.getInstances()) {
+            DescribeInstancesRequest request = DescribeInstancesRequest.builder().maxResults(6).nextToken(nextToken).build();
+            DescribeInstancesResponse response = ec2Client.describeInstances(request);
+            for (Reservation reservation : response.reservations()) {
+                for (Instance instance : reservation.instances()) {
                     System.out.printf(
                             "Found reservation with id %s, " +
                                     "AMI %s, " +
                                     "type %s, " +
                                     "state %s " +
                                     "and monitoring state %s",
-                            instance.getInstanceId(),
-                            instance.getImageId(),
-                            instance.getInstanceType(),
-                            instance.getState().getName(),
-                            instance.getMonitoring().getState());
+                            instance.instanceId(),
+                            instance.imageId(),
+                            instance.instanceType(),
+                            instance.state().name(),
+                            instance.monitoring().state());
                     System.out.println("");
                 }
             }
-            nextToken = response.getNextToken();
+            nextToken = response.nextToken();
         } while (nextToken != null);
     }
 
@@ -306,13 +301,13 @@ public class Ec2ClientOperations {
      * @param deviceName the device name /dev/xvdf etc
      */
     public void addEbsToEc2Instance(String instanceId, String volumeId, String deviceName) {
-        DescribeInstancesRequest request = new DescribeInstancesRequest().withInstanceIds(instanceId);
-        DescribeInstancesResult response;
+        DescribeInstancesRequest request = DescribeInstancesRequest.builder().instanceIds(instanceId).build();
+        DescribeInstancesResponse response;
         do {
             response = ec2Client.describeInstances(request);
-        } while(response.getReservations().get(0).getInstances().get(0).getState().getCode() != 16);
-        AttachVolumeRequest requestAttach = new AttachVolumeRequest().withInstanceId(instanceId).withVolumeId(volumeId);
-        requestAttach.withDevice(deviceName);
+        } while(response.reservations().get(0).instances().get(0).state().code() != 16);
+        AttachVolumeRequest requestAttach = AttachVolumeRequest.builder().instanceId(instanceId).volumeId(volumeId)
+                .device(deviceName).build();
         ec2Client.attachVolume(requestAttach);
     }
 
@@ -325,18 +320,18 @@ public class Ec2ClientOperations {
      * @return volume Id
      */
     public String createEbsVolume(String name, String availabilityZone, int size, VolumeType volumeType) {
-        CreateVolumeRequest volumeRequest = new CreateVolumeRequest();
-        volumeRequest.withAvailabilityZone(availabilityZone).withSize(size).withVolumeType(volumeType);
-        String volumeId = ec2Client.createVolume(volumeRequest).getVolume().getVolumeId();
-        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(volumeId);
-        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        CreateVolumeRequest volumeRequest = CreateVolumeRequest.builder().availabilityZone(availabilityZone)
+                .size(size).volumeType(volumeType).build();
+        String volumeId = ec2Client.createVolume(volumeRequest).volumeId();
+        CreateTagsRequest tagNameRequest = CreateTagsRequest.builder().resources(volumeId)
+                .tags(Tag.builder().key("Name").value(name).build()).build();
         ec2Client.createTags(tagNameRequest);
         return volumeId;
     }
 
     public String getAvailabilityZone(String instanceId) {
-        DescribeInstancesRequest request = new DescribeInstancesRequest().withInstanceIds(instanceId);
-        DescribeInstancesResult response = ec2Client.describeInstances(request);
-        return response.getReservations().get(0).getInstances().get(0).getPlacement().getAvailabilityZone();
+        DescribeInstancesRequest request = DescribeInstancesRequest.builder().instanceIds(instanceId).build();
+        DescribeInstancesResponse response = ec2Client.describeInstances(request);
+        return response.reservations().get(0).instances().get(0).placement().availabilityZone();
     }
 }

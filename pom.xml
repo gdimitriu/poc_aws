@@ -14,8 +14,8 @@
                     <artifactId>maven-compiler-plugin</artifactId>
                     <version>3.8.0</version>
                     <configuration>
-                        <source>11</source>
-                        <target>11</target>
+                        <source>13</source>
+                        <target>13</target>
                     </configuration>
                 </plugin>
             </plugins>
@@ -25,6 +25,9 @@
         <aws.version>2.10.0</aws.version>
         <aws.groupId>software.amazon.awssdk</aws.groupId>
         <aws.prefix.artifactId/>
+        <aws1.version>1.11.672</aws1.version>
+        <aws1.groupId>com.amazonaws</aws1.groupId>
+        <aws1.prefix.artifactId>aws-java-sdk-</aws1.prefix.artifactId>
     </properties>
     <dependencies>
         <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-core -->
@@ -81,6 +84,12 @@
             <artifactId>${aws.prefix.artifactId}auth</artifactId>
             <version>${aws.version}</version>
         </dependency>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>url-connection-client</artifactId>
+            <version>2.1.0</version>
+        </dependency>
+
         <!-- java 11 dependencies for jaxb -->
         <dependency>
             <groupId>javax.xml.bind</groupId>
@@ -92,5 +101,65 @@
             <artifactId>jaxb-runtime</artifactId>
             <version>2.4.0-b180725.0644</version>
         </dependency>
+
+        <!-- to be removed -->
+        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-core -->
+        <dependency>
+            <groupId>${aws1.groupId}</groupId>
+            <artifactId>${aws1.prefix.artifactId}core</artifactId>
+            <version>${aws1.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-s3 -->
+        <dependency>
+            <groupId>${aws1.groupId}</groupId>
+            <artifactId>${aws1.prefix.artifactId}s3</artifactId>
+            <version>${aws1.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-ec2 -->
+        <dependency>
+            <groupId>${aws1.groupId}</groupId>
+            <artifactId>${aws1.prefix.artifactId}ec2</artifactId>
+            <version>${aws1.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sns -->
+        <dependency>
+            <groupId>${aws1.groupId}</groupId>
+            <artifactId>${aws1.prefix.artifactId}sns</artifactId>
+            <version>${aws1.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sqs -->
+        <dependency>
+            <groupId>${aws1.groupId}</groupId>
+            <artifactId>${aws1.prefix.artifactId}sqs</artifactId>
+            <version>${aws1.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-mq -->
+        <dependency>
+            <groupId>${aws1.groupId}</groupId>
+            <artifactId>${aws1.prefix.artifactId}mq</artifactId>
+            <version>${aws1.version}</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-elasticloadbalancing -->
+        <dependency>
+            <groupId>${aws1.groupId}</groupId>
+            <artifactId>${aws1.prefix.artifactId}elasticloadbalancing</artifactId>
+            <version>${aws1.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>${aws1.groupId}</groupId>
+            <artifactId>${aws1.prefix.artifactId}iam</artifactId>
+            <version>${aws1.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.amazonaws</groupId>
+            <artifactId>amazon-sqs-java-messaging-lib</artifactId>
+            <version>1.0.6</version>
+        </dependency>
+<!--        <dependency>
+            <groupId>${aws1.groupId}</groupId>
+            <artifactId>${aws1.prefix.artifactId}auth</artifactId>
+            <version>${aws1.version}</version>
+        </dependency> -->
     </dependencies>
 </project>
