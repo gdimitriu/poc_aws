@@ -103,43 +103,37 @@
         </dependency>
 
         <!-- to be removed -->
-        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-core -->
+        <!--
         <dependency>
             <groupId>${aws1.groupId}</groupId>
             <artifactId>${aws1.prefix.artifactId}core</artifactId>
             <version>${aws1.version}</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-s3 -->
         <dependency>
             <groupId>${aws1.groupId}</groupId>
             <artifactId>${aws1.prefix.artifactId}s3</artifactId>
             <version>${aws1.version}</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-ec2 -->
         <dependency>
             <groupId>${aws1.groupId}</groupId>
             <artifactId>${aws1.prefix.artifactId}ec2</artifactId>
             <version>${aws1.version}</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sns -->
         <dependency>
             <groupId>${aws1.groupId}</groupId>
             <artifactId>${aws1.prefix.artifactId}sns</artifactId>
             <version>${aws1.version}</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-sqs -->
         <dependency>
             <groupId>${aws1.groupId}</groupId>
             <artifactId>${aws1.prefix.artifactId}sqs</artifactId>
             <version>${aws1.version}</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-mq -->
         <dependency>
             <groupId>${aws1.groupId}</groupId>
             <artifactId>${aws1.prefix.artifactId}mq</artifactId>
             <version>${aws1.version}</version>
         </dependency>
-        <!-- https://mvnrepository.com/artifact/com.amazonaws/aws-java-sdk-elasticloadbalancing -->
         <dependency>
             <groupId>${aws1.groupId}</groupId>
             <artifactId>${aws1.prefix.artifactId}elasticloadbalancing</artifactId>
@@ -156,10 +150,6 @@
             <artifactId>amazon-sqs-java-messaging-lib</artifactId>
             <version>1.0.6</version>
         </dependency>
-<!--        <dependency>
-            <groupId>${aws1.groupId}</groupId>
-            <artifactId>${aws1.prefix.artifactId}auth</artifactId>
-            <version>${aws1.version}</version>
-        </dependency> -->
+        -->
     </dependencies>
 </project>
