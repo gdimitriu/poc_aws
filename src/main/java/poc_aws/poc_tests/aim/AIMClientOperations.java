@@ -20,18 +20,17 @@
 
 package poc_aws.poc_tests.aim;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.services.identitymanagement.AmazonIdentityManagement;
-import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClientBuilder;
-import com.amazonaws.services.identitymanagement.model.AttachRolePolicyRequest;
-import com.amazonaws.services.identitymanagement.model.CreateRoleRequest;
-import com.amazonaws.services.identitymanagement.model.GetInstanceProfileRequest;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.iam.IamClient;
+import software.amazon.awssdk.services.iam.model.*;
 
 public class AIMClientOperations {
     /** aim client  */
-    private AmazonIdentityManagement aimClient;
+    private IamClient iamClient;
     private static String DOCUMENT = "{"+
             "    \"Version\": \"2012-10-17\","+
             "    \"Statement\": ["+
@@ -47,34 +46,46 @@ public class AIMClientOperations {
 
     public static void main(String...args) {
         AIMClientOperations client = new AIMClientOperations();
-        client.describeRole();
         client.createRoleS3();
         client.attachRolePolicy();
+        client.createInstanceProfileAndRole();
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+
+        }
+        client.describeRole();
     }
 
     /**
      * Default constructor.
      */
     public AIMClientOperations() {
-        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        aimClient = AmazonIdentityManagementClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
-                .withRegion("AWS_GLOBAL").build();
+        AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
+        iamClient = IamClient.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .region(Region.AWS_GLOBAL).httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
     private void createRoleS3() {
-        CreateRoleRequest request = new CreateRoleRequest();
-        request.withRoleName("MyS3role").withAssumeRolePolicyDocument(DOCUMENT);
-        aimClient.createRole(request);
+        CreateRoleRequest request = CreateRoleRequest.builder().roleName("MyS3role").assumeRolePolicyDocument(DOCUMENT).build();
+        iamClient.createRole(request);
     }
 
     private void attachRolePolicy() {
-        AttachRolePolicyRequest request = new AttachRolePolicyRequest().withRoleName("MyS3role").withPolicyArn("arn:aws:iam::aws:policy/AmazonS3FullAccess");
-        aimClient.attachRolePolicy(request);
+        AttachRolePolicyRequest request = AttachRolePolicyRequest.builder().roleName("MyS3role").policyArn("arn:aws:iam::aws:policy/AmazonS3FullAccess").build();
+        iamClient.attachRolePolicy(request);
     }
 
     private void describeRole() {
+        GetInstanceProfileRequest request = GetInstanceProfileRequest.builder().instanceProfileName("MyS3role").build();
+        System.out.println(iamClient.getInstanceProfile(request).instanceProfile());
+    }
 
-        GetInstanceProfileRequest request =new GetInstanceProfileRequest().withInstanceProfileName("EC2_WITH_S3");
-        System.out.println(aimClient.getInstanceProfile(request).getInstanceProfile());
+    private void createInstanceProfileAndRole() {
+        CreateInstanceProfileRequest requestCreateInstanceProfile = CreateInstanceProfileRequest.builder().instanceProfileName("MyS3role").build();
+        CreateInstanceProfileResponse result = iamClient.createInstanceProfile(requestCreateInstanceProfile);
+        AddRoleToInstanceProfileRequest requstAddRoleToInstanceProfile = AddRoleToInstanceProfileRequest.builder().instanceProfileName("MyS3role").roleName("MyS3role").build();
+        iamClient.addRoleToInstanceProfile(requstAddRoleToInstanceProfile);
+
     }
 }
