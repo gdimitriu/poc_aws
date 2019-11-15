@@ -20,12 +20,12 @@
 
 package poc_aws.projects.pharma;
 
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.ec2.model.InstanceType;
-import poc_aws.ec2.EC2Infrastructure;
 import poc_aws.ec2.EC2Authorization;
+import poc_aws.ec2.EC2Infrastructure;
 import poc_aws.ec2.EC2Instances;
 import poc_aws.s3.S3Infrastructure;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.ec2.model.InstanceType;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -115,11 +115,11 @@ public class PharmaEc2Servers {
 
     private static final String EC2_FULL_ACCESS_TO_S3 = "EC2_WITH_S3";
     private PharmaEc2Servers() {
-        ec2Authorization = new EC2Authorization(Regions.US_EAST_1);
+        ec2Authorization = new EC2Authorization(Region.US_EAST_1);
         //create the role and instance profile for access to S3.
         ec2Authorization.createEC2S3FullRoleAndProfile(EC2_FULL_ACCESS_TO_S3);
         //upload the webservers on S3.
-        s3Infrastructure = new S3Infrastructure(ec2Authorization.getS3Client());
+        s3Infrastructure = new S3Infrastructure(Region.US_EAST_1);
         s3Infrastructure.uploadNewFileToBucket(ROOT_BUCKET_DELIVERY_NAME, "pharma_webservers/pharma_web1.zip", "pharma_webservers/web1.zip");
         s3Infrastructure.uploadNewFileToBucket(ROOT_BUCKET_DELIVERY_NAME, "pharma_webservers/pharma_web2.zip", "pharma_webservers/web2.zip");
         s3Infrastructure.uploadNewFileToBucket(ROOT_BUCKET_DELIVERY_NAME, "pharma_webservers/welcome.conf", "pharma_webservers/welcome.conf");
@@ -140,7 +140,7 @@ public class PharmaEc2Servers {
         //create the network infrastructure.
         ec2Infrastructure = new EC2Infrastructure(ec2Authorization.getEc2Client());
         ec2Instances = new EC2Instances((ec2Authorization.getEc2Client()));
-        String vpcId = ec2Infrastructure.createVpc(VPC_NAME, "10.0.0.0/16").getVpcId();
+        String vpcId = ec2Infrastructure.createVpc(VPC_NAME, "10.0.0.0/16").vpcId();
         ec2Infrastructure.createSecurityGroup(SECURITY_GROUP_DBSERVER_NAME,SECURITY_GROUP_DBSERVER_DESCRIPTION, vpcId);
         ec2Infrastructure.addFirewallRule(vpcId, SECURITY_GROUP_DBSERVER_NAME, Arrays.asList(new String[]{"0.0.0.0/0"}), "tcp", 22, 22);
         ec2Infrastructure.createSecurityGroup(SECURITY_GROUP_WEBSERVER_NAME,SECURITY_GROUP_WEBSERVER_DESCRIPTION, vpcId);
@@ -179,14 +179,14 @@ public class PharmaEc2Servers {
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2)), ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME));
 
         //create web machines
-        String w1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
+        String w1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2_MICRO, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_1), INSTALL_SCRIPT_1, "WebInstance1",EC2_FULL_ACCESS_TO_S3);
-        String w2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
+        String w2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2_MICRO, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_WEBSERVER_NAME),
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_2), INSTALL_SCRIPT_2, "WebInstance2", EC2_FULL_ACCESS_TO_S3);
         //create db machines
-        String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
+        String i1Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2_MICRO, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_3), null, "DBInstance1", EC2_FULL_ACCESS_TO_S3);
-        String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2Micro, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
+        String i2Id = ec2Instances.runInstance(MACHINE_IMAGE, InstanceType.T2_MICRO, 1, 1, KEY_PAIR_NAME, ec2Infrastructure.getSecurityGroupId(vpcId, SECURITY_GROUP_DBSERVER_NAME),
                 ec2Infrastructure.getSubnetId(PHARMA_SUBNET_4), null, "DBInstance2", EC2_FULL_ACCESS_TO_S3);
         //add web machines to load balancer
         ec2Infrastructure.addInstacesToLB(LOAD_BALANCER_NAME,Arrays.asList(w1Id, w2Id));

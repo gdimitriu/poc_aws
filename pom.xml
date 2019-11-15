@@ -103,7 +103,7 @@
         </dependency>
 
         <!-- to be removed -->
-        <!--
+
         <dependency>
             <groupId>${aws1.groupId}</groupId>
             <artifactId>${aws1.prefix.artifactId}core</artifactId>
@@ -145,11 +145,12 @@
             <artifactId>${aws1.prefix.artifactId}iam</artifactId>
             <version>${aws1.version}</version>
         </dependency>
+
         <dependency>
             <groupId>com.amazonaws</groupId>
             <artifactId>amazon-sqs-java-messaging-lib</artifactId>
             <version>1.0.6</version>
         </dependency>
-        -->
+
     </dependencies>
 </project>

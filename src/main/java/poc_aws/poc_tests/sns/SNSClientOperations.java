@@ -32,8 +32,6 @@ import software.amazon.awssdk.services.sns.model.DeleteTopicRequest;
 import software.amazon.awssdk.services.sns.model.PublishRequest;
 import software.amazon.awssdk.services.sns.model.Tag;
 
-import java.util.List;
-import java.util.Map;
 import java.util.Scanner;
 
 public class SNSClientOperations {

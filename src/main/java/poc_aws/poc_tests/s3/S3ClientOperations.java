@@ -20,20 +20,14 @@
 
 package poc_aws.poc_tests.s3;
 
-import com.amazonaws.AmazonServiceException;
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.policy.Policy;
-import com.amazonaws.auth.policy.Principal;
-import com.amazonaws.auth.policy.Resource;
-import com.amazonaws.auth.policy.Statement;
-import com.amazonaws.auth.policy.actions.S3Actions;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.Bucket;
-import com.amazonaws.services.s3.model.S3ObjectSummary;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.sync.ResponseTransformer;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -46,33 +40,30 @@ import java.util.stream.Collectors;
 @SuppressWarnings("access-can-be-private")
 public class S3ClientOperations {
 
-    private AmazonS3 s3client;
+    private S3Client s3client;
     /**
      * bucket should be unique across entire S3
      */
     private static final String BUCKET_PREFIX = "gabrieldimitriu";
     private static final String BUCKET_LOAD = BUCKET_PREFIX + "load";
-    public static void main(String...args) {
+
+    public static void main(String... args) {
         System.out.println("Create buckets in s3");
         S3ClientOperations client = new S3ClientOperations();
-        client.createBucket(BUCKET_PREFIX+ "test");
+        client.createBucket(BUCKET_PREFIX + "test");
         client.createBucket(BUCKET_PREFIX + "test1");
         List<Bucket> buckets = client.getAllBuckets();
-        buckets.stream().map(Bucket::getName).forEach(System.out::println);
+        buckets.stream().map(Bucket::name).forEach(System.out::println);
 
         System.out.println("Delete the not empty bucket at second run of the test");
         client.forceDeleteNotEmptyBucket(BUCKET_LOAD);
         System.out.println("Now delete all buckets");
-        client.removeBuckets(buckets).forEach((key, value) -> System.out.println("bucket=" + key.getName() + " error = " + value.getLocalizedMessage()));
+        client.removeBuckets(buckets).forEach((key, value) -> System.out.println("bucket=" + key.name() + " error = " + value.getLocalizedMessage()));
 
         System.out.println("Create bucket and upload files");
         client.uploadFileToBucket(BUCKET_LOAD, "poc_tests/testDocument.txt", "testDocument1.txt");
         client.uploadFileToBucket(BUCKET_LOAD, "poc_tests/testDocument.txt", "testDocument2.txt");
         client.uploadFileToBucket(BUCKET_LOAD, "poc_tests/testDocument.txt", "testDocument3.txt");
-
-        System.out.println("List object from the bucket");
-        List<S3ObjectSummary> objectSummaries = client.getUploadedObjectsFromBucket(BUCKET_LOAD);
-        objectSummaries.forEach(ob -> System.out.println(ob.getKey()));
 
         System.out.println("Download and print objects");
         List<InputStream> inputStreams = client.getAllObjectFromBucket(BUCKET_LOAD);
@@ -82,36 +73,39 @@ public class S3ClientOperations {
     }
 
     public S3ClientOperations() {
-        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        s3client = AmazonS3ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials)).withRegion(Regions.US_EAST_1).build();
+        AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
+        s3client = S3Client.builder().credentialsProvider(StaticCredentialsProvider.create(credentials)).region(Region.US_EAST_1)
+                .httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
-    public Bucket createBucket(String bucketName) {
-        if (s3client.doesBucketExistV2(bucketName)) {
-            System.out.println("Bucket with name " + bucketName + " already exist!");
-            return null;
+    public void createBucket(String bucketName) {
+        if(!bucketExists(bucketName)) {
+            s3client.createBucket(CreateBucketRequest.builder().bucket(bucketName).build());
         }
-        return s3client.createBucket(bucketName);
     }
 
+    /**
+     * get all the buckets of the user and region
+     * @return list of buckets
+     */
     public List<Bucket> getAllBuckets() {
-        return s3client.listBuckets();
+        return s3client.listBuckets().buckets();
     }
 
     /**
      * This will remove the buckets, the removed bocket is removed also from the list
+     *
      * @param toRemove list of buckets to be removed
      * @return map of buckets with exceptions
      */
     public Map<Bucket, Exception> removeBuckets(List<Bucket> toRemove) {
         Map<Bucket, Exception> removeError = new HashMap<>();
         Iterator iter = toRemove.iterator();
-        while(iter.hasNext()) {
+        while (iter.hasNext()) {
             Bucket bucket = (Bucket) iter.next();
             try {
-                forceDeleteNotEmptyBucket(bucket.getName());
-                iter.remove();
-            } catch (AmazonServiceException e) {
+                forceDeleteNotEmptyBucket(bucket.name());
+            } catch (S3Exception e) {
                 removeError.put(bucket, e);
             }
         }
@@ -120,7 +114,8 @@ public class S3ClientOperations {
 
     /**
      * get the file from resource
-     * @param resourceFile  name of the resource
+     *
+     * @param resourceFile name of the resource
      * @return the file
      */
     private File getFileFromResource(String resourceFile) {
@@ -135,7 +130,8 @@ public class S3ClientOperations {
      * upload file to Bucket.
      * If the bucket does not exist create it.
      * If the file exist print message.
-     * @param bucketName the name of the bucket
+     *
+     * @param bucketName   the name of the bucket
      * @param fileToUpload the file to upload
      * @param fileOnS3Name the name of the file on s3
      * @return true if file is uploaded, false if exists
@@ -145,62 +141,86 @@ public class S3ClientOperations {
         if (file == null) {
             return false;
         }
-        if (!s3client.doesBucketExistV2(bucketName)) {
+        if (!bucketExists(bucketName)) {
             createBucket(bucketName);
         }
-        if (!s3client.doesObjectExist(bucketName, file.getName())) {
-            s3client.putObject(bucketName, fileOnS3Name, file);
-            return true;
-        } else {
-            System.out.println("Object " + fileToUpload + " already exists!");
-            return false;
+        if (!objectExists(bucketName, fileOnS3Name)) {
+            s3client.putObject(PutObjectRequest.builder().bucket(bucketName).key(fileOnS3Name).build(), file.toPath());
         }
+        return true;
     }
 
     /**
-     * get the summary for the objects from bucket.
+     * check if the object (file) exist into a bucket
      * @param bucketName the name of the bucket
-     * @return list of object summary
+     * @param fileName the name of the file
+     * @return true if the file exists otherwise false
      */
-    public List<S3ObjectSummary> getUploadedObjectsFromBucket(String bucketName) {
-        List<S3ObjectSummary> objects = new ArrayList<>();
-        s3client.listObjects(bucketName).getObjectSummaries().forEach(objects::add);
-        return objects;
+    private boolean objectExists(String bucketName, String fileName) {
+        List<S3Object> objects = s3client.listObjects(ListObjectsRequest.builder().bucket(bucketName).build()).contents();
+        for (S3Object object : objects) {
+            if (object.key().equals(fileName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
+    /**
+     * check if the bucket exists
+     * @param bucketName the name of the bucket
+     * @return true if the bucket exists false otherwise
+     */
+    private boolean bucketExists(String bucketName) {
+        List<Bucket> buckets = s3client.listBuckets(ListBucketsRequest.builder().build()).buckets();
+        for (Bucket bucket : buckets) {
+            if (bucket.name().equals(bucketName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get all the files (objects) from a bucket
+     * @param bucketName the name of the bucket
+     * @return the list of input streams
+     */
     public List<InputStream> getAllObjectFromBucket(String bucketName) {
         List<InputStream> objects = new ArrayList<>();
-        s3client.listObjects(bucketName).getObjectSummaries().forEach(ob -> objects.add(s3client.getObject(bucketName,ob.getKey()).getObjectContent()));
+        s3client.listObjects(ListObjectsRequest.builder().bucket(bucketName).build()).contents()
+                .forEach(ob -> objects.add(s3client.getObject(GetObjectRequest.builder().bucket(bucketName).key(ob.key()).build(), ResponseTransformer.toInputStream())));
         return objects;
     }
 
     /**
      * force delete the bucket. s3 does not have the notion of folder is just a prefix in front of the file.
      * so to delete all elements from a bucket you have to delete all objects.
+     *
      * @param bucketName the name of the bucket
      */
     private void forceDeleteNotEmptyBucket(String bucketName) {
-        if (s3client.doesBucketExistV2(bucketName)) {
-            //this could be done using request but is more complicated
-            /*
-            List<String> objects = new ArrayList<>();
-            s3client.listObjects(bucketName).getObjectSummaries().stream().forEach(ob -> objects.add(ob.getKey()));
-            if (objects.size() > 0) {
-                DeleteObjectsRequest delObjsReq = new DeleteObjectsRequest(bucketName).withKeys(objects.toArray(new String[1]));
-                s3client.deleteObjects(delObjsReq);
-            } */
-            s3client.listObjects(bucketName).getObjectSummaries().forEach(ob -> s3client.deleteObject(bucketName,ob.getKey()));
-            s3client.deleteBucket(bucketName);
+        if (bucketExists(bucketName)) {
+            s3client.listObjects(ListObjectsRequest.builder().bucket(bucketName).build()).contents()
+                    .forEach(ob -> s3client.deleteObject(DeleteObjectRequest.builder().bucket(bucketName).key(ob.key()).build()));
+            s3client.deleteBucket(DeleteBucketRequest.builder().bucket(bucketName).build());
         }
     }
 
     public void setPublicReadPolicy(String bucketName) {
-        String bucketPolicy = new Policy().withStatements(
-                new Statement(Statement.Effect.Allow)
-                        .withPrincipals(Principal.AllUsers)
-                        .withActions(S3Actions.GetObject)
-                        .withResources(new Resource(
-                                "arn:aws:s3:::" + bucketName + "/*"))).toJson();
-        s3client.setBucketPolicy(bucketName, bucketPolicy);
+        String readAllPolicy = "{" +
+                "    \"Version\": \"2012-10-17\"," +
+                "    \"Statement\": [" +
+                "        {" +
+                "            \"Effect\": \"Allow\"," +
+                "            \"Action\": \"s3:GetObject\"," +
+                "            \"Resource\": \"arn:aws:s3:::" + bucketName + "/*" + "\"," +
+                "            \"Principal\": {" +
+                "                  \"AWS\":[ \"*\"]" +
+                "            }" +
+                "        }" +
+                "    ]" +
+                "}";
+        s3client.putBucketPolicy(PutBucketPolicyRequest.builder().bucket(bucketName).policy(readAllPolicy).build());
     }
 }

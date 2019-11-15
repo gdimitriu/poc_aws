@@ -22,6 +22,7 @@ package poc_aws.ec2;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.Tag;
@@ -50,12 +51,12 @@ public class EC2Infrastructure {
     public EC2Infrastructure() {
         AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
         ec2Client = Ec2Client.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .region(Region.US_EAST_1).build();
+                .region(Region.US_EAST_1).httpClientBuilder(UrlConnectionHttpClient.builder()).build();
         securityGroupsByVpc = new HashMap<>();
         subnetsByNetwork = new HashMap<>();
         listenersOfLb = new HashMap<>();
         lbClient = ElasticLoadBalancingClient.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .region(Region.US_EAST_1).build();
+                .region(Region.US_EAST_1).httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
     /**
@@ -70,7 +71,7 @@ public class EC2Infrastructure {
         listenersOfLb = new HashMap<>();
         lbClient = ElasticLoadBalancingClient.builder()
                 .credentialsProvider(StaticCredentialsProvider.create(ProfileCredentialsProvider.builder().build().resolveCredentials()))
-                .region(Region.US_EAST_1).build();
+                .region(Region.US_EAST_1).httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
     /**
@@ -398,7 +399,7 @@ public class EC2Infrastructure {
 
                 }
             }
-        } while (!(result.natGateways().size() == 1 && result.natGateways().get(0).state().equals(NatGatewayState.AVAILABLE.toString())));
+        } while (!(result.natGateways().size() == 1 && result.natGateways().get(0).state().name().equals(NatGatewayState.AVAILABLE.name())));
         DescribeRouteTablesRequest request1 = DescribeRouteTablesRequest.builder().filters(Filter.builder().name("tag:Name").values(name).build()).build();
         String id = ec2Client.describeRouteTables(request1).routeTables().get(0).routeTableId();
         CreateRouteRequest requestRoute = CreateRouteRequest.builder().routeTableId(id).destinationCidrBlock(address).natGatewayId(natGatewayId).build();

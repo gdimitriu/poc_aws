@@ -19,18 +19,17 @@
  */
 package poc_aws.projects.pharma;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
-import com.amazonaws.services.ec2.model.*;
-import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancing;
-import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClientBuilder;
-import com.amazonaws.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
-import com.amazonaws.services.elasticloadbalancing.model.LoadBalancerDescription;
-import com.amazonaws.services.elasticloadbalancing.model.RegisterInstancesWithLoadBalancerRequest;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.ec2.model.*;
+import software.amazon.awssdk.services.elasticloadbalancing.ElasticLoadBalancingClient;
+import software.amazon.awssdk.services.elasticloadbalancing.model.DescribeLoadBalancersRequest;
+import software.amazon.awssdk.services.elasticloadbalancing.model.LoadBalancerDescription;
+import software.amazon.awssdk.services.elasticloadbalancing.model.RegisterInstancesWithLoadBalancerRequest;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -44,10 +43,10 @@ import java.util.stream.Collectors;
 
 public class EC2InfrastructureRequests {
     /** ec2 client for amazon instances */
-    private AmazonEC2 ec2Client;
+    private Ec2Client ec2Client;
 
     /** load balancer client*/
-    private AmazonElasticLoadBalancing lbClient;
+    private ElasticLoadBalancingClient lbClient;
 
     /** the instance id on which we will have the processing */
     private String instanceId;
@@ -88,11 +87,13 @@ public class EC2InfrastructureRequests {
      * constructor to initialize the ec2 client and elastic load balancer client.
      */
     public EC2InfrastructureRequests() {
-        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        ec2Client = AmazonEC2ClientBuilder.standard().withRegion(Regions.US_EAST_1)
-                .withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
-        lbClient = AmazonElasticLoadBalancingClientBuilder.standard().withRegion(Regions.US_EAST_1)
-                .withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
+        AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
+        ec2Client = Ec2Client.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .region(Region.US_EAST_1)
+                .httpClientBuilder(UrlConnectionHttpClient.builder()).build();
+        lbClient = ElasticLoadBalancingClient.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .region(Region.US_EAST_1)
+                .httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
     /** find and set the instance id  */
@@ -118,19 +119,19 @@ public class EC2InfrastructureRequests {
      *  describe the instances with all parameters.
      * */
     public void describeInstances() {
-        DescribeInstancesRequest request = new DescribeInstancesRequest().withInstanceIds(instanceId);
-        DescribeInstancesResult response = ec2Client.describeInstances(request);
-        for (Reservation reservation : response.getReservations()) {
-            for (Instance instance : reservation.getInstances()) {
-                System.out.println("instance id =" + instance.getInstanceId());
-                System.out.println("imageId = " + instance.getImageId());
-                System.out.println("instance type = " +instance.getInstanceType());
-                System.out.println("instance architecture = " + instance.getArchitecture());
-                System.out.println("IAM arn = "  + instance.getIamInstanceProfile().getArn());
-                System.out.println("Key name = " + instance.getKeyName());
-                System.out.println("subnet Id  = " + instance.getSubnetId());
-                System.out.println("VPC Id  = " + instance.getVpcId());
-                System.out.println("Security Groups = " + instance.getSecurityGroups());
+        DescribeInstancesRequest request = DescribeInstancesRequest.builder().instanceIds(instanceId).build();
+        DescribeInstancesResponse response = ec2Client.describeInstances(request);
+        for (Reservation reservation : response.reservations()) {
+            for (Instance instance : reservation.instances()) {
+                System.out.println("instance id =" + instance.instanceId());
+                System.out.println("imageId = " + instance.imageId());
+                System.out.println("instance type = " +instance.instanceType());
+                System.out.println("instance architecture = " + instance.architecture());
+                System.out.println("IAM arn = "  + instance.iamInstanceProfile().arn());
+                System.out.println("Key name = " + instance.keyName());
+                System.out.println("subnet Id  = " + instance.subnetId());
+                System.out.println("VPC Id  = " + instance.vpcId());
+                System.out.println("Security Groups = " + instance.securityGroups());
                 System.out.println("");
             }
         }
@@ -141,13 +142,13 @@ public class EC2InfrastructureRequests {
      */
     public void findLoadBalancer() {
 
-        List<LoadBalancerDescription> descriptions  = lbClient.describeLoadBalancers(new DescribeLoadBalancersRequest())
-                .getLoadBalancerDescriptions();
+        List<LoadBalancerDescription> descriptions  = lbClient.describeLoadBalancers(DescribeLoadBalancersRequest.builder().build())
+                .loadBalancerDescriptions();
         for (LoadBalancerDescription description : descriptions) {
-            for (com.amazonaws.services.elasticloadbalancing.model.Instance instance : description.getInstances()) {
-                if (instance.getInstanceId().equals(instanceId)) {
-                    System.out.println("Assigned load balancer is :" + description.getLoadBalancerName());
-                    loadBalancerName = description.getLoadBalancerName();
+            for (software.amazon.awssdk.services.elasticloadbalancing.model.Instance instance : description.instances()) {
+                if (instance.instanceId().equals(instanceId)) {
+                    System.out.println("Assigned load balancer is :" + description.loadBalancerName());
+                    loadBalancerName = description.loadBalancerName();
                     return;
                 }
             }
@@ -159,10 +160,10 @@ public class EC2InfrastructureRequests {
      * @return the Instance
      */
     private Instance getInstanceFromId() {
-        DescribeInstancesResult response = ec2Client.describeInstances(new DescribeInstancesRequest().withInstanceIds(instanceId));
-        for (Reservation reservation : response.getReservations()) {
-            for (Instance instance : reservation.getInstances()) {
-                if(instanceId.equals(instance.getInstanceId())) {
+        DescribeInstancesResponse response = ec2Client.describeInstances(DescribeInstancesRequest.builder().instanceIds(instanceId).build());
+        for (Reservation reservation : response.reservations()) {
+            for (Instance instance : reservation.instances()) {
+                if(instanceId.equals(instance.instanceId())) {
                     return instance;
                 }
             }
@@ -181,27 +182,27 @@ public class EC2InfrastructureRequests {
             return null;
         }
         List<String> securityGroupIds = new ArrayList<>();
-        instanceToClone.getSecurityGroups().stream().forEach(group -> securityGroupIds.add(group.getGroupId()));
-        RunInstancesRequest request = new RunInstancesRequest().withMinCount(1).withMaxCount(1);
-        request.withImageId(instanceToClone.getImageId()).withInstanceType(instanceToClone.getInstanceType()).withKeyName(instanceToClone.getKeyName());
+        instanceToClone.securityGroups().stream().forEach(group -> securityGroupIds.add(group.groupId()));
+        RunInstancesRequest.Builder request = RunInstancesRequest.builder().minCount(1).maxCount(1);
+        request.imageId(instanceToClone.imageId()).instanceType(instanceToClone.instanceType()).keyName(instanceToClone.keyName());
         //do not work with security group and subnets.
         //.withSecurityGroupIds(securityGroupId);
         List<InstanceNetworkInterfaceSpecification> interfaces = new ArrayList<>();
-        InstanceNetworkInterfaceSpecification interfaceDNS = new InstanceNetworkInterfaceSpecification();
-        interfaceDNS.withSubnetId(instanceToClone.getSubnetId()).withAssociatePublicIpAddress(true).setDeviceIndex(0);
-        interfaceDNS.setGroups(securityGroupIds);
-        interfaces.add(interfaceDNS);
-        request.withNetworkInterfaces(interfaces).withAdditionalInfo("--associate-public-ip-address");
+        InstanceNetworkInterfaceSpecification.Builder interfaceDNS = InstanceNetworkInterfaceSpecification.builder();
+        interfaceDNS.subnetId(instanceToClone.subnetId()).associatePublicIpAddress(true).deviceIndex(0);
+        interfaceDNS.groups(securityGroupIds);
+        interfaces.add(interfaceDNS.build());
+        request.networkInterfaces(interfaces).additionalInfo("--associate-public-ip-address");
         if (installingScript != null) {
-            request.withUserData(Base64.getEncoder().encodeToString(installingScript.getBytes()));
+            request.userData(Base64.getEncoder().encodeToString(installingScript.getBytes()));
         }
-        IamInstanceProfileSpecification profile = new IamInstanceProfileSpecification().withArn(instanceToClone.getIamInstanceProfile().getArn());
-        request.withIamInstanceProfile(profile);
-        RunInstancesResult result = ec2Client.runInstances(request);
-        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(result.getReservation().getInstances().get(0).getInstanceId());
-        tagNameRequest.withTags(new Tag().withKey("Name").withValue("cloned"));
-        ec2Client.createTags(tagNameRequest);
-        return result.getReservation().getInstances().get(0).getInstanceId();
+        IamInstanceProfileSpecification profile = IamInstanceProfileSpecification.builder().arn(instanceToClone.iamInstanceProfile().arn()).build();
+        request.iamInstanceProfile(profile);
+        RunInstancesResponse result = ec2Client.runInstances(request.build());
+        CreateTagsRequest.Builder tagNameRequest = CreateTagsRequest.builder().resources(result.instances().get(0).instanceId());
+        tagNameRequest.tags(Tag.builder().key("Name").value("cloned").build());
+        ec2Client.createTags(tagNameRequest.build());
+        return result.instances().get(0).instanceId();
     }
 
     /**
@@ -209,10 +210,16 @@ public class EC2InfrastructureRequests {
      * @param instanceId the instance id
      */
     public void addInstacesToLB(String instanceId) {
-        RegisterInstancesWithLoadBalancerRequest request = new RegisterInstancesWithLoadBalancerRequest();
-        List<com.amazonaws.services.elasticloadbalancing.model.Instance> instances = new ArrayList<>();
-        instances.add(new com.amazonaws.services.elasticloadbalancing.model.Instance(instanceId));
-        request.withLoadBalancerName(loadBalancerName).withInstances(instances);
+        DescribeInstancesRequest describeRequest = DescribeInstancesRequest.builder().instanceIds(instanceId).build();
+        DescribeInstancesResponse describeResult = null;
+        do {
+            describeResult = ec2Client.describeInstances(describeRequest);
+        } while (describeResult.reservations().get(0).instances().get(0).state().code() != 16);
+
+        List<software.amazon.awssdk.services.elasticloadbalancing.model.Instance> instances = new ArrayList<>();
+        instances.add(software.amazon.awssdk.services.elasticloadbalancing.model.Instance.builder().instanceId(instanceId).build());
+        RegisterInstancesWithLoadBalancerRequest request = RegisterInstancesWithLoadBalancerRequest.builder()
+                .loadBalancerName(loadBalancerName).instances(instances).build();
         lbClient.registerInstancesWithLoadBalancer(request);
     }
 }

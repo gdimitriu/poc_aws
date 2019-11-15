@@ -23,6 +23,7 @@ package poc_aws.ec2;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.*;
@@ -63,11 +64,11 @@ public class EC2Authorization {
     public EC2Authorization(Region region) {
         AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
         ec2Client = Ec2Client.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .region(region).build();
+                .region(region).httpClientBuilder(UrlConnectionHttpClient.builder()).build();
         iamClient = IamClient.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .region(Region.AWS_GLOBAL).build();
+                .region(Region.AWS_GLOBAL).httpClientBuilder(UrlConnectionHttpClient.builder()).build();
         s3client = S3Client.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .region(region).build();
+                .region(region).httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
     /**

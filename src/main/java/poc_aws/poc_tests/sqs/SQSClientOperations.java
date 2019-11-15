@@ -20,14 +20,15 @@
 
 package poc_aws.poc_tests.sqs;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
-import com.amazonaws.services.sqs.model.*;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
@@ -35,7 +36,7 @@ import java.util.Scanner;
 public class SQSClientOperations {
 
 
-    private AmazonSQS sqsClient;
+    private SqsClient sqsClient;
     public static void main(String...args) {
         SQSClientOperations client = new SQSClientOperations();
         String queueUrl = null;
@@ -78,8 +79,9 @@ public class SQSClientOperations {
     }
 
     public SQSClientOperations() {
-        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        sqsClient = AmazonSQSClientBuilder.standard().withRegion(Regions.US_EAST_1).withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
+        AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
+        sqsClient = SqsClient.builder().credentialsProvider(StaticCredentialsProvider.create(credentials)).region(Region.US_EAST_1)
+                .httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
     /**
@@ -90,11 +92,13 @@ public class SQSClientOperations {
      * @return queue url
      */
     public String createStandardQueue(String name, int delay, int retentionPeriod) {
-        CreateQueueRequest request = new CreateQueueRequest(name)
-                .addAttributesEntry("DelaySeconds", Integer.toString(delay))
-                .addAttributesEntry("MessageRetentionPeriod", Integer.toString(retentionPeriod));
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("DelaySeconds", Integer.toString(delay));
+        attributes.put("MessageRetentionPeriod", Integer.toString(retentionPeriod));
+        CreateQueueRequest request = CreateQueueRequest.builder().queueName(name)
+                .attributesWithStrings(attributes).build();
         sqsClient.createQueue(request);
-        return sqsClient.getQueueUrl(name).getQueueUrl();
+        return sqsClient.getQueueUrl(GetQueueUrlRequest.builder().queueName(name).build()).queueUrl();
     }
 
     /**
@@ -105,12 +109,14 @@ public class SQSClientOperations {
      * @return queue url
      */
     public String createFifoQueue(String name, int delay, int retentionPeriod) {
-        CreateQueueRequest request = new CreateQueueRequest(name + ".fifo")
-                .addAttributesEntry("DelaySeconds", Integer.toString(delay))
-                .addAttributesEntry("MessageRetentionPeriod", Integer.toString(retentionPeriod))
-                .addAttributesEntry("ContentBasedDeduplication", "true")
-                .addAttributesEntry("FifoQueue", "true");
-        return sqsClient.createQueue(request).getQueueUrl();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("DelaySeconds", Integer.toString(delay));
+        attributes.put("MessageRetentionPeriod", Integer.toString(retentionPeriod));
+        attributes.put("ContentBasedDeduplication", "true");
+        attributes.put("FifoQueue", "true");
+        CreateQueueRequest request = CreateQueueRequest.builder().queueName(name + ".fifo").attributesWithStrings(attributes).build();
+        sqsClient.createQueue(request);
+        return sqsClient.getQueueUrl(GetQueueUrlRequest.builder().queueName(name + ".fifo").build()).queueUrl();
     }
 
     /**
@@ -118,7 +124,7 @@ public class SQSClientOperations {
      * @param queueUrl name of the queue to be deleted
      */
     public void deleteQeueue(String queueUrl) {
-        DeleteQueueRequest request = new DeleteQueueRequest().withQueueUrl(queueUrl);
+        DeleteQueueRequest request = DeleteQueueRequest.builder().queueUrl(queueUrl).build();
         sqsClient.deleteQueue(request);
     }
 
@@ -128,16 +134,16 @@ public class SQSClientOperations {
      * @param message the message to be send
      */
     public void sendMessage(String queueUrl, String message) {
-        GetQueueAttributesRequest description = new GetQueueAttributesRequest().withQueueUrl(queueUrl).withAttributeNames("FifoQueue");
-        Map<String, String>  attributes = sqsClient.getQueueAttributes(description).getAttributes();
-        SendMessageRequest request = new SendMessageRequest().withMessageBody(message).withQueueUrl(queueUrl);
+        GetQueueAttributesRequest description = GetQueueAttributesRequest.builder().attributeNamesWithStrings("FifoQueue").queueUrl(queueUrl).build();
+        Map<String, String>  attributes = sqsClient.getQueueAttributes(description).attributesAsStrings();
+        SendMessageRequest.Builder request = SendMessageRequest.builder().messageBody(message).queueUrl(queueUrl);
         if (attributes.containsKey("FifoQueue")) {
             if (attributes.get("FifoQueue").equals("true")) {
-                request.withMessageGroupId("awk.test");
+                request.messageGroupId("awk.test");
             }
         }
 
-        sqsClient.sendMessage(request);
+        sqsClient.sendMessage(request.build());
     }
 
     /**
@@ -146,13 +152,13 @@ public class SQSClientOperations {
      * @return list of messages
      */
     public List<Message> readAndPrintAll(String queueUrl) {
-        ReceiveMessageRequest request = new ReceiveMessageRequest().withQueueUrl(queueUrl).withMaxNumberOfMessages(10);
-        List<Message> messages = sqsClient.receiveMessage(request).getMessages();
-        messages.stream().map(a -> a.getBody()).forEach(System.out::println);
+        ReceiveMessageRequest request = ReceiveMessageRequest.builder().queueUrl(queueUrl).maxNumberOfMessages(10).build();
+        List<Message> messages = sqsClient.receiveMessage(request).messages();
+        messages.stream().map(a -> a.body()).forEach(System.out::println);
         for (Message message : messages) {
-            ChangeMessageVisibilityRequest requestVisibility = new ChangeMessageVisibilityRequest().withQueueUrl(queueUrl);
-            requestVisibility.withReceiptHandle(message.getReceiptHandle()).withVisibilityTimeout(60);
-            sqsClient.changeMessageVisibility(requestVisibility);
+            ChangeMessageVisibilityRequest.Builder requestVisibility = ChangeMessageVisibilityRequest.builder().queueUrl(queueUrl);
+            requestVisibility.receiptHandle(message.receiptHandle()).visibilityTimeout(60);
+            sqsClient.changeMessageVisibility(requestVisibility.build());
         }
         return messages;
     }
@@ -167,7 +173,8 @@ public class SQSClientOperations {
             return;
         }
         for (Message message : messages) {
-            DeleteMessageRequest request = new DeleteMessageRequest().withQueueUrl(queueUrl).withReceiptHandle(message.getReceiptHandle());
+            DeleteMessageRequest request = DeleteMessageRequest.builder()
+                    .queueUrl(queueUrl).receiptHandle(message.receiptHandle()).build();
             sqsClient.deleteMessage(request);
         }
     }

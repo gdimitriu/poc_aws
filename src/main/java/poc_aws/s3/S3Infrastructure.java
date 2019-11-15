@@ -19,43 +19,43 @@
  */
 package poc_aws.s3;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.Bucket;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.File;
 import java.net.URL;
+import java.util.List;
 
 public class S3Infrastructure {
 
     /** the client for the Amazon storage */
-    private AmazonS3 s3client;
+    private S3Client s3client;
 
-    public S3Infrastructure(Regions region) {
-        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        s3client = AmazonS3ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
-                .withRegion(region).build();
+    public S3Infrastructure(Region region) {
+        AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
+        s3client = S3Client.builder().credentialsProvider(StaticCredentialsProvider.create(credentials)).region(region)
+                .httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
-    public S3Infrastructure(AmazonS3 client) {
+    public S3Infrastructure(S3Client client) {
         this.s3client = client;
     }
 
     /**
      * Create a bucket with the specific name into the region.
      * @param bucketName the name of the bucket
-     * @return the amazon bucket or null if the bucket already exists
      */
-    public Bucket createBucket(String bucketName) {
-        if (s3client.doesBucketExistV2(bucketName)) {
+    public void createBucket(String bucketName) {
+        if (bucketExists(bucketName)) {
             System.out.println("Bucket with name " + bucketName + " already exist!");
-            return null;
+            return;
         }
-        return s3client.createBucket(bucketName);
+        s3client.createBucket(CreateBucketRequest.builder().bucket(bucketName).build());
     }
 
     /**
@@ -85,15 +85,33 @@ public class S3Infrastructure {
         if (file == null) {
             return false;
         }
-        if (!s3client.doesBucketExistV2(bucketName)) {
-            createBucket(bucketName);
-        }
-        if (!s3client.doesObjectExist(bucketName, file.getName())) {
-            s3client.putObject(bucketName, fileOnS3Name, file);
+        createBucket(bucketName);
+        if (!objectExists(bucketName, file.getName())) {
+            s3client.putObject(PutObjectRequest.builder().bucket(bucketName).key(fileOnS3Name).build(), file.toPath());
             return true;
         } else {
             System.out.println("Object " + fileToUpload + " already exists!");
             return false;
         }
+    }
+
+    private boolean objectExists(String bucketName, String fileName) {
+        List<S3Object> objects = s3client.listObjects(ListObjectsRequest.builder().bucket(bucketName).build()).contents();
+        for (S3Object object : objects) {
+            if (object.key().equals(fileName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean bucketExists(String bucketName) {
+        List<Bucket> buckets = s3client.listBuckets(ListBucketsRequest.builder().build()).buckets();
+        for (Bucket bucket : buckets) {
+            if (bucket.name().equals(bucketName)) {
+                return true;
+            }
+        }
+        return false;
     }
 }
