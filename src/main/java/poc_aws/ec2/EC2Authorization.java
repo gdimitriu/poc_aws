@@ -20,18 +20,15 @@
 
 package poc_aws.ec2;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
-import com.amazonaws.services.ec2.model.*;
-import com.amazonaws.services.identitymanagement.AmazonIdentityManagement;
-import com.amazonaws.services.identitymanagement.AmazonIdentityManagementClientBuilder;
-import com.amazonaws.services.identitymanagement.model.*;
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.ec2.model.*;
+import software.amazon.awssdk.services.iam.IamClient;
+import software.amazon.awssdk.services.iam.model.*;
+import software.amazon.awssdk.services.s3.S3Client;
 
 import java.io.BufferedWriter;
 import java.io.FileWriter;
@@ -39,16 +36,16 @@ import java.io.IOException;
 
 public class EC2Authorization {
     /** ec2 client for amazon instances */
-    private AmazonEC2 ec2Client;
+    private Ec2Client ec2Client;
 
     /** key pair for connection to EC2 instances */
-    private KeyPair keyPair;
+    private CreateKeyPairResponse keyPair;
 
-    /** aim client  */
-    private AmazonIdentityManagement aimClient;
+    /** iam client  */
+    private IamClient iamClient;
 
     /** the client for the Amazon storage */
-    private AmazonS3 s3client;
+    private S3Client s3client;
 
     private static String EC2_FULL_S3 = "{"+
             "    \"Version\": \"2012-10-17\","+
@@ -63,21 +60,21 @@ public class EC2Authorization {
             "    ]"+
             "}";
 
-    public EC2Authorization(Regions region) {
-        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        ec2Client = AmazonEC2ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
-                .withRegion(region).build();
-        aimClient = AmazonIdentityManagementClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
-                .withRegion("AWS_GLOBAL").build();
-        s3client = AmazonS3ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
-                .withRegion(region).build();
+    public EC2Authorization(Region region) {
+        AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
+        ec2Client = Ec2Client.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .region(region).build();
+        iamClient = IamClient.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .region(Region.AWS_GLOBAL).build();
+        s3client = S3Client.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .region(region).build();
     }
 
     /**
      * get the EC2Client.
      * @return ec2Client.
      */
-    public AmazonEC2 getEc2Client() {
+    public Ec2Client getEc2Client() {
         return this.ec2Client;
     }
 
@@ -85,7 +82,7 @@ public class EC2Authorization {
      * get the S3Client
      * @return s3Client
      */
-    public AmazonS3 getS3Client() {
+    public S3Client getS3Client() {
         return this.s3client;
     }
 
@@ -95,8 +92,8 @@ public class EC2Authorization {
      * @return true if the key already exists.
      */
     private boolean isKeyPairCreated(String keyName) {
-        DescribeKeyPairsResult result = ec2Client.describeKeyPairs();
-        return result.getKeyPairs().stream().map(KeyPairInfo::getKeyName).anyMatch(str -> str.equals(keyName));
+        DescribeKeyPairsResponse result = ec2Client.describeKeyPairs();
+        return result.keyPairs().stream().map(KeyPairInfo::keyName).anyMatch(str -> str.equals(keyName));
     }
 
     /**
@@ -106,7 +103,7 @@ public class EC2Authorization {
      */
     public void savePEMToFile(String fileName) throws IOException {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(fileName))) {
-            writer.write(keyPair.getKeyMaterial());
+            writer.write(keyPair.keyMaterial());
         }
     }
 
@@ -118,20 +115,18 @@ public class EC2Authorization {
     public void createKeyPair(String keyName, boolean force) {
         if (isKeyPairCreated(keyName) && force) {
             System.out.println("The existing keyPair " + keyName + " will be deleted and recreated!");
-            DeleteKeyPairRequest request = new DeleteKeyPairRequest().withKeyName(keyName);
+            DeleteKeyPairRequest request = DeleteKeyPairRequest.builder().keyName(keyName).build();
             try {
                 ec2Client.deleteKeyPair(request);
-            } catch (AmazonEC2Exception e) {
+            } catch (Ec2Exception e) {
                 e.printStackTrace();
                 return;
             }
         } else if (!force) {
             return;
         }
-        CreateKeyPairRequest request = new CreateKeyPairRequest();
-        request.withKeyName(keyName);
-        CreateKeyPairResult result = ec2Client.createKeyPair(request);
-        keyPair =  result.getKeyPair();
+        CreateKeyPairRequest request = CreateKeyPairRequest.builder().keyName(keyName).build();
+        keyPair = ec2Client.createKeyPair(request);
     }
 
     /**
@@ -141,15 +136,14 @@ public class EC2Authorization {
      * @retun the arn of the created role.
      */
     public String createEC2S3FullRoleAndProfile(String name) {
-        CreateRoleRequest request = new CreateRoleRequest();
-        request.withRoleName(name).withAssumeRolePolicyDocument(EC2_FULL_S3);
-        aimClient.createRole(request);
-        AttachRolePolicyRequest requestAtachPolicy= new AttachRolePolicyRequest().withRoleName(name).withPolicyArn("arn:aws:iam::aws:policy/AmazonS3FullAccess");
-        aimClient.attachRolePolicy(requestAtachPolicy);
-        CreateInstanceProfileRequest requestCreateInstanceProfile = new CreateInstanceProfileRequest().withInstanceProfileName(name);
-        CreateInstanceProfileResult result = aimClient.createInstanceProfile(requestCreateInstanceProfile);
-        AddRoleToInstanceProfileRequest requstAddRoleToInstanceProfile = new AddRoleToInstanceProfileRequest().withInstanceProfileName(name).withRoleName(name);
-        aimClient.addRoleToInstanceProfile(requstAddRoleToInstanceProfile);
-        return result.getInstanceProfile().getArn();
+        CreateRoleRequest request = CreateRoleRequest.builder().roleName(name).assumeRolePolicyDocument(EC2_FULL_S3).build();
+        iamClient.createRole(request);
+        AttachRolePolicyRequest requestAtachPolicy= AttachRolePolicyRequest.builder().roleName(name).policyArn("arn:aws:iam::aws:policy/AmazonS3FullAccess").build();
+        iamClient.attachRolePolicy(requestAtachPolicy);
+        CreateInstanceProfileRequest requestCreateInstanceProfile = CreateInstanceProfileRequest.builder().instanceProfileName(name).build();
+        CreateInstanceProfileResponse result = iamClient.createInstanceProfile(requestCreateInstanceProfile);
+        AddRoleToInstanceProfileRequest requstAddRoleToInstanceProfile = AddRoleToInstanceProfileRequest.builder().instanceProfileName(name).roleName(name).build();
+        iamClient.addRoleToInstanceProfile(requstAddRoleToInstanceProfile);
+        return result.instanceProfile().arn();
     }
 }

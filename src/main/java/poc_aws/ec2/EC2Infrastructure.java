@@ -19,28 +19,25 @@
  */
 package poc_aws.ec2;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.AmazonEC2ClientBuilder;
-import com.amazonaws.services.ec2.model.*;
-import com.amazonaws.services.ec2.model.Tag;
-import com.amazonaws.services.elasticloadbalancing.model.Instance;
-import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancing;
-import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingAsyncClientBuilder;
-import com.amazonaws.services.elasticloadbalancing.AmazonElasticLoadBalancingClientBuilder;
-import com.amazonaws.services.elasticloadbalancing.model.*;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.ec2.Ec2Client;
+import software.amazon.awssdk.services.ec2.model.Tag;
+import software.amazon.awssdk.services.ec2.model.*;
+import software.amazon.awssdk.services.elasticloadbalancing.ElasticLoadBalancingClient;
+import software.amazon.awssdk.services.elasticloadbalancing.model.*;
+import software.amazon.awssdk.services.elasticloadbalancing.model.Instance;
 
 import java.util.*;
 
 public class EC2Infrastructure {
     /** ec2 client for amazon instances */
-    private AmazonEC2 ec2Client;
+    private Ec2Client ec2Client;
 
     /** load balancer client*/
-    private AmazonElasticLoadBalancing lbClient;
+    private ElasticLoadBalancingClient lbClient;
 
     /** maps of maps to keep correspondence of vpdid and sgid */
     Map<String, Map<String, String>> securityGroupsByVpc;
@@ -51,27 +48,29 @@ public class EC2Infrastructure {
     Map<String,List<Listener>> listenersOfLb;
 
     public EC2Infrastructure() {
-        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        ec2Client = AmazonEC2ClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials))
-                .withRegion(Regions.US_EAST_1).build();
+        AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
+        ec2Client = Ec2Client.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .region(Region.US_EAST_1).build();
         securityGroupsByVpc = new HashMap<>();
         subnetsByNetwork = new HashMap<>();
         listenersOfLb = new HashMap<>();
-        lbClient = AmazonElasticLoadBalancingClientBuilder.standard().withCredentials(new AWSStaticCredentialsProvider(credentials)).withRegion(Regions.US_EAST_1).build();
+        lbClient = ElasticLoadBalancingClient.builder().credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .region(Region.US_EAST_1).build();
     }
 
     /**
      * Constructor using the client for amazon EC2.
      * @param client of the amazon EC2
      */
-    public EC2Infrastructure(AmazonEC2 client)
+    public EC2Infrastructure(Ec2Client client)
     {
         this.ec2Client = client;
         securityGroupsByVpc = new HashMap<>();
         subnetsByNetwork = new HashMap<>();
         listenersOfLb = new HashMap<>();
-        lbClient = AmazonElasticLoadBalancingAsyncClientBuilder.standard()
-                .withCredentials(new AWSStaticCredentialsProvider(new ProfileCredentialsProvider().getCredentials())).withRegion(Regions.US_EAST_1).build();
+        lbClient = ElasticLoadBalancingClient.builder()
+                .credentialsProvider(StaticCredentialsProvider.create(ProfileCredentialsProvider.builder().build().resolveCredentials()))
+                .region(Region.US_EAST_1).build();
     }
 
     /**
@@ -82,11 +81,11 @@ public class EC2Infrastructure {
      */
     private boolean isSecurityGroupCreated(String sgName, String vpcId) {
         if (vpcId == null) {
-            DescribeSecurityGroupsRequest request = new DescribeSecurityGroupsRequest().withGroupNames(sgName);
+            DescribeSecurityGroupsRequest request = DescribeSecurityGroupsRequest.builder().groupNames(sgName).build();
             try {
-                DescribeSecurityGroupsResult result = ec2Client.describeSecurityGroups(request);
-                return result.getSecurityGroups().stream().map(SecurityGroup::getGroupName).anyMatch(str -> str.equals(sgName));
-            } catch (AmazonEC2Exception e) {
+                DescribeSecurityGroupsResponse result = ec2Client.describeSecurityGroups(request);
+                return result.securityGroups().stream().map(SecurityGroup::groupName).anyMatch(str -> str.equals(sgName));
+            } catch (Ec2Exception e) {
                 return false;
             }
         } else {
@@ -111,19 +110,19 @@ public class EC2Infrastructure {
     public EC2Infrastructure createSecurityGroup(String sgName, String sgDescription, String vpcId) {
         String realVpc = vpcId;
         if(!isSecurityGroupCreated(sgName, vpcId)) {
-            CreateSecurityGroupRequest request = new CreateSecurityGroupRequest().withGroupName(sgName)
-                    .withDescription(sgDescription);
+            CreateSecurityGroupRequest.Builder request = CreateSecurityGroupRequest.builder().groupName(sgName)
+                    .description(sgDescription);
             if (realVpc != null && !realVpc.isEmpty()) {
-                request.withVpcId(realVpc);
+                request.vpcId(realVpc);
             } else {
                 realVpc = "default";
             }
-            CreateSecurityGroupResult result = ec2Client.createSecurityGroup(request);
+            CreateSecurityGroupResponse result = ec2Client.createSecurityGroup(request.build());
             if (securityGroupsByVpc.containsKey(realVpc)) {
-                securityGroupsByVpc.get(realVpc).put(sgName,result.getGroupId());
+                securityGroupsByVpc.get(realVpc).put(sgName,result.groupId());
             } else {
                 Map<String, String> sgs = new HashMap<>();
-                sgs.put(sgName, result.getGroupId());
+                sgs.put(sgName, result.groupId());
                 securityGroupsByVpc.put(realVpc, sgs);
             }
         }
@@ -157,24 +156,24 @@ public class EC2Infrastructure {
      * @return  true if it could add the firewall rule
      */
     public EC2Infrastructure addFirewallRule(String vpcId, String securityGroupName, List<String> ipRangesStr, String protocol, int fromPort, int toPort) {
-        IpPermission ipPermission = new IpPermission();
+        IpPermission.Builder ipPermission = IpPermission.builder();
         List<IpRange> ipRanges = new ArrayList<>();
-        ipRangesStr.forEach(a -> ipRanges.add(new IpRange().withCidrIp(a)));
-        ipPermission.withIpv4Ranges(ipRanges).withIpProtocol(protocol).withFromPort(fromPort).withToPort(toPort);
-        AuthorizeSecurityGroupIngressRequest authorizeSecurityGroupIngressRequest = new AuthorizeSecurityGroupIngressRequest().withIpPermissions(ipPermission);
+        ipRangesStr.forEach(a -> ipRanges.add(IpRange.builder().cidrIp(a).build()));
+        ipPermission.ipRanges(ipRanges).ipProtocol(protocol).fromPort(fromPort).toPort(toPort);
+        AuthorizeSecurityGroupIngressRequest.Builder authorizeSecurityGroupIngressRequest = AuthorizeSecurityGroupIngressRequest.builder().ipPermissions(ipPermission.build());
         String securityGroupId = getSecurityGroupId(vpcId, securityGroupName);
         if (securityGroupId != null) {
-            authorizeSecurityGroupIngressRequest.withGroupId(securityGroupId);
+            authorizeSecurityGroupIngressRequest.groupId(securityGroupId);
         } else {
             System.out.println("Security group does not exist! You must create one before add firewalls rules.");
             return this;
         }
         try {
-            ec2Client.authorizeSecurityGroupIngress(authorizeSecurityGroupIngressRequest);
-        } catch (AmazonEC2Exception e) {
-            if (e.getErrorCode().equals("InvalidPermission.Duplicate")) {
-                System.out.println("Rule already exist for ipRange " + ipRangesStr + " on protocol " + protocol);
-            }
+            ec2Client.authorizeSecurityGroupIngress(authorizeSecurityGroupIngressRequest.build());
+        } catch (Ec2Exception e) {
+//            if (e.statusCode().equals("InvalidPermission.Duplicate")) {
+//                System.out.println("Rule already exist for ipRange " + ipRangesStr + " on protocol " + protocol);
+//            }
             System.out.println(e.getLocalizedMessage());
         }
         return this;
@@ -192,15 +191,14 @@ public class EC2Infrastructure {
         if (vpc != null) {
             return vpc;
         }
-        CreateVpcRequest request = new CreateVpcRequest(ipRange);
-        CreateVpcResult result = ec2Client.createVpc(request);
-        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(result.getVpc().getVpcId());
-        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
-        ec2Client.createTags(tagNameRequest);
-        ModifyVpcAttributeRequest requestDNS = new ModifyVpcAttributeRequest()
-                .withEnableDnsHostnames(true).withVpcId(result.getVpc().getVpcId());
+        CreateVpcResponse result = ec2Client.createVpc(CreateVpcRequest.builder().cidrBlock(ipRange).build());
+        CreateTagsRequest.Builder tagNameRequest = CreateTagsRequest.builder().resources(result.vpc().vpcId());
+        tagNameRequest.tags(Tag.builder().key("Name").value(name).build());
+        ec2Client.createTags(tagNameRequest.build());
+        ModifyVpcAttributeRequest requestDNS = ModifyVpcAttributeRequest.builder()
+                .enableDnsHostnames(AttributeBooleanValue.builder().value(true).build()).vpcId(result.vpc().vpcId()).build();
         ec2Client.modifyVpcAttribute(requestDNS);
-        return result.getVpc();
+        return result.vpc();
     }
 
     /**
@@ -209,9 +207,9 @@ public class EC2Infrastructure {
      * @return null if does not exist
      */
     private Vpc getVpcIfExists(String ipRange) {
-        DescribeVpcsResult result = ec2Client.describeVpcs(new DescribeVpcsRequest());
-        for (Vpc vpc : result.getVpcs()) {
-            if (ipRange.equals(vpc.getCidrBlock())) {
+        DescribeVpcsResponse result = ec2Client.describeVpcs(DescribeVpcsRequest.builder().build());
+        for (Vpc vpc : result.vpcs()) {
+            if (ipRange.equals(vpc.cidrBlock())) {
                 return vpc;
             }
         }
@@ -227,12 +225,12 @@ public class EC2Infrastructure {
      * @return this to be chained.
      */
     public EC2Infrastructure addSubnet(String vpcId, String network, String availabilityZone, String name) {
-        CreateSubnetRequest request = new CreateSubnetRequest();
-        request.withAvailabilityZone(availabilityZone).withCidrBlock(network).withVpcId(vpcId);
-        CreateSubnetResult result = ec2Client.createSubnet(request);
-        subnetsByNetwork.put(network, result.getSubnet());
-        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(result.getSubnet().getSubnetId());
-        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        CreateSubnetRequest.Builder request = CreateSubnetRequest.builder();
+        request.availabilityZone(availabilityZone).cidrBlock(network).vpcId(vpcId);
+        CreateSubnetResponse result = ec2Client.createSubnet(request.build());
+        subnetsByNetwork.put(network, result.subnet());
+        CreateTagsRequest tagNameRequest = CreateTagsRequest.builder().resources(result.subnet().subnetId())
+            .tags(Tag.builder().key("Name").value(name).build()).build();
         ec2Client.createTags(tagNameRequest);
         return this;
     }
@@ -243,7 +241,7 @@ public class EC2Infrastructure {
      * @return subnetId
      */
     public String getSubnetId(String network) {
-        return subnetsByNetwork.get(network).getSubnetId();
+        return subnetsByNetwork.get(network).subnetId();
     }
 
     /**
@@ -254,15 +252,15 @@ public class EC2Infrastructure {
      * @param crossBlancingAZ true if will load balancing in all AX
      */
     public void createLoadBalancer(String name, boolean crossBlancingAZ, List<String> subnets, String...securityGroupId) {
-        CreateLoadBalancerRequest request = new CreateLoadBalancerRequest().withLoadBalancerName(name);
-        request.withSubnets(subnets).withSecurityGroups(securityGroupId)
-                .withTags(Arrays.asList(new com.amazonaws.services.elasticloadbalancing.model.Tag().withKey("Name").withValue(name)));
-        request.withListeners(listenersOfLb.get(name));
-        CreateLoadBalancerResult result = lbClient.createLoadBalancer(request);
+        CreateLoadBalancerRequest.Builder request = CreateLoadBalancerRequest.builder().loadBalancerName(name);
+        request.subnets(subnets).securityGroups(securityGroupId)
+                .tags(Arrays.asList(software.amazon.awssdk.services.elasticloadbalancing.model.Tag.builder().key("Name").value(name).build()));
+        request.listeners(listenersOfLb.get(name));
+        CreateLoadBalancerResponse result = lbClient.createLoadBalancer(request.build());
         if(crossBlancingAZ) {
-           ModifyLoadBalancerAttributesRequest enableLBAZ = new ModifyLoadBalancerAttributesRequest();
-           enableLBAZ.withLoadBalancerName(name).withLoadBalancerAttributes(new LoadBalancerAttributes().withCrossZoneLoadBalancing(new CrossZoneLoadBalancing().withEnabled(true)));
-           lbClient.modifyLoadBalancerAttributes(enableLBAZ);
+           ModifyLoadBalancerAttributesRequest.Builder enableLBAZ = ModifyLoadBalancerAttributesRequest.builder();
+           enableLBAZ.loadBalancerName(name).loadBalancerAttributes(LoadBalancerAttributes.builder().crossZoneLoadBalancing(CrossZoneLoadBalancing.builder().enabled(true).build()).build());
+           lbClient.modifyLoadBalancerAttributes(enableLBAZ.build());
         }
     }
 
@@ -276,8 +274,8 @@ public class EC2Infrastructure {
      * @return this to be chained.
      */
     public EC2Infrastructure addListnerToExistingLoadBalancer(String lbName, String lbProtocol,int lbPort, String instanceProtocol, int instancePort) {
-        Listener listener = new Listener().withInstancePort(instancePort).withInstanceProtocol(instanceProtocol).withLoadBalancerPort(lbPort).withProtocol(lbProtocol);
-        CreateLoadBalancerListenersRequest request = new CreateLoadBalancerListenersRequest().withListeners(listener).withLoadBalancerName(lbName);
+        Listener listener = Listener.builder().instancePort(instancePort).instanceProtocol(instanceProtocol).loadBalancerPort(lbPort).protocol(lbProtocol).build();
+        CreateLoadBalancerListenersRequest request = CreateLoadBalancerListenersRequest.builder().listeners(listener).loadBalancerName(lbName).build();
         lbClient.createLoadBalancerListeners(request);
         return this;
     }
@@ -292,7 +290,7 @@ public class EC2Infrastructure {
      * @return this to be chained.
      */
     public EC2Infrastructure addListnerToLoadBalancer(String lbName, String lbProtocol,int lbPort, String instanceProtocol, int instancePort) {
-        Listener listener = new Listener().withInstancePort(instancePort).withInstanceProtocol(instanceProtocol).withLoadBalancerPort(lbPort).withProtocol(lbProtocol);
+        Listener listener = Listener.builder().instancePort(instancePort).instanceProtocol(instanceProtocol).loadBalancerPort(lbPort).protocol(lbProtocol).build();
         if (listenersOfLb.containsKey(lbName)) {
             listenersOfLb.get(lbName).add(listener);
         } else {
@@ -310,12 +308,11 @@ public class EC2Infrastructure {
      * @return this to be chained
      */
     public EC2Infrastructure addInstacesToLB(String lbName, List<String> instanceIds) {
-        RegisterInstancesWithLoadBalancerRequest request = new RegisterInstancesWithLoadBalancerRequest();
         List<Instance> instances = new ArrayList<>();
         for (String id : instanceIds) {
-            instances.add(new Instance(id));
+            instances.add(Instance.builder().instanceId(id).build());
         }
-        request.withLoadBalancerName(lbName).withInstances(instances);
+        RegisterInstancesWithLoadBalancerRequest request = RegisterInstancesWithLoadBalancerRequest.builder().loadBalancerName(lbName).instances(instances).build();
         lbClient.registerInstancesWithLoadBalancer(request);
         return this;
     }
@@ -327,12 +324,12 @@ public class EC2Infrastructure {
      * @return internet gateway id
      */
     public String  createInternetGateway(String name, String vpcId) {
-        CreateInternetGatewayResult result = ec2Client.createInternetGateway(new CreateInternetGatewayRequest());
-        AttachInternetGatewayRequest request = new AttachInternetGatewayRequest().withInternetGatewayId(result.getInternetGateway().getInternetGatewayId()).withVpcId(vpcId);
+        CreateInternetGatewayResponse result = ec2Client.createInternetGateway(CreateInternetGatewayRequest.builder().build());
+        AttachInternetGatewayRequest request = AttachInternetGatewayRequest.builder().internetGatewayId(result.internetGateway().internetGatewayId()).vpcId(vpcId).build();
         ec2Client.attachInternetGateway(request);
-        String igwId = result.getInternetGateway().getInternetGatewayId();
-        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(igwId);
-        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        String igwId = result.internetGateway().internetGatewayId();
+        CreateTagsRequest tagNameRequest = CreateTagsRequest.builder().resources(igwId)
+                .tags(Tag.builder().key("Name").value(name).build()).build();
         ec2Client.createTags(tagNameRequest);
         return igwId;
     }
@@ -344,12 +341,12 @@ public class EC2Infrastructure {
      * @return this to be chained
      */
     public EC2Infrastructure addTagNameToNewCreatedRouteTable(String name, String vpcId) {
-        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("vpc-id").withValues(vpcId));
-        List<RouteTable> routes = ec2Client.describeRouteTables(request1).getRouteTables();
+        DescribeRouteTablesRequest request1 = DescribeRouteTablesRequest.builder().filters(Filter.builder().name("vpc-id").values(vpcId).build()).build();
+        List<RouteTable> routes = ec2Client.describeRouteTables(request1).routeTables();
         int index = 0;
         for (int i=0 ; i < routes.size(); i++) {
-            for (Tag tag :routes.get(i).getTags()) {
-                if ("Name".equals(tag.getKey())) {
+            for (Tag tag :routes.get(i).tags()) {
+                if ("Name".equals(tag.key())) {
                     index = -1;
                     break;
                 }
@@ -359,9 +356,9 @@ public class EC2Infrastructure {
                 break;
             }
         }
-        String id = routes.get(index).getRouteTableId();
-        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(id);
-        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        String id = routes.get(index).routeTableId();
+        CreateTagsRequest tagNameRequest = CreateTagsRequest.builder().resources(id)
+                .tags(Tag.builder().key("Name").value(name).build()).build();
         ec2Client.createTags(tagNameRequest);
         return this;
     }
@@ -374,10 +371,10 @@ public class EC2Infrastructure {
      * @return this to be chained.
      */
     public EC2Infrastructure addRouteToRouteTableToInternetGatewayId(String address, String internetGatewayId, String name) {
-        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("tag:Name").withValues(name));
-        String id = ec2Client.describeRouteTables(request1).getRouteTables().get(0).getRouteTableId();
-        CreateRouteRequest requestRoute = new CreateRouteRequest();
-        requestRoute.withRouteTableId(id).withDestinationCidrBlock(address).withGatewayId(internetGatewayId);
+        DescribeRouteTablesRequest request1 = DescribeRouteTablesRequest.builder().filters(Filter.builder().name("tag:Name").values(name).build()).build();
+        String id = ec2Client.describeRouteTables(request1).routeTables().get(0).routeTableId();
+        CreateRouteRequest requestRoute = CreateRouteRequest.builder()
+                .routeTableId(id).destinationCidrBlock(address).gatewayId(internetGatewayId).build();
         ec2Client.createRoute(requestRoute);
         return this;
     }
@@ -390,22 +387,21 @@ public class EC2Infrastructure {
      * @return this to be chained.
      */
     public EC2Infrastructure addRouteToRouteTableToNatGatewayId(String address, String natGatewayId, String name) {
-        DescribeNatGatewaysRequest natGatewaysRequest = new DescribeNatGatewaysRequest().withNatGatewayIds(natGatewayId);
-        DescribeNatGatewaysResult result;
+        DescribeNatGatewaysRequest natGatewaysRequest = DescribeNatGatewaysRequest.builder().natGatewayIds(natGatewayId).build();
+        DescribeNatGatewaysResponse result;
         do {
             result = ec2Client.describeNatGateways(natGatewaysRequest);
-            if (result.getNatGateways().size() == 0) {
+            if (result.natGateways().size() == 0) {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
 
                 }
             }
-        } while (!(result.getNatGateways().size() == 1 && result.getNatGateways().get(0).getState().equals(NatGatewayState.Available.toString())));
-        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("tag:Name").withValues(name));
-        String id = ec2Client.describeRouteTables(request1).getRouteTables().get(0).getRouteTableId();
-        CreateRouteRequest requestRoute = new CreateRouteRequest();
-        requestRoute.withRouteTableId(id).withDestinationCidrBlock(address).withNatGatewayId(natGatewayId);
+        } while (!(result.natGateways().size() == 1 && result.natGateways().get(0).state().equals(NatGatewayState.AVAILABLE.toString())));
+        DescribeRouteTablesRequest request1 = DescribeRouteTablesRequest.builder().filters(Filter.builder().name("tag:Name").values(name).build()).build();
+        String id = ec2Client.describeRouteTables(request1).routeTables().get(0).routeTableId();
+        CreateRouteRequest requestRoute = CreateRouteRequest.builder().routeTableId(id).destinationCidrBlock(address).natGatewayId(natGatewayId).build();
         ec2Client.createRoute(requestRoute);
         return this;
     }
@@ -417,9 +413,9 @@ public class EC2Infrastructure {
      * @return this to be chained
      */
     public EC2Infrastructure assignSubnetToRouteTable(String subnetId, String name) {
-        DescribeRouteTablesRequest request1 = new DescribeRouteTablesRequest().withFilters(new Filter().withName("tag:Name").withValues(name));
-        String id = ec2Client.describeRouteTables(request1).getRouteTables().get(0).getRouteTableId();
-        AssociateRouteTableRequest request = new AssociateRouteTableRequest().withRouteTableId(id).withSubnetId(subnetId);
+        DescribeRouteTablesRequest request1 = DescribeRouteTablesRequest.builder().filters(Filter.builder().name("tag:Name").values(name).build()).build();
+        String id = ec2Client.describeRouteTables(request1).routeTables().get(0).routeTableId();
+        AssociateRouteTableRequest request = AssociateRouteTableRequest.builder().routeTableId(id).subnetId(subnetId).build();
         ec2Client.associateRouteTable(request);
         return this;
     }
@@ -431,10 +427,10 @@ public class EC2Infrastructure {
      * @return this to be chained
      */
     public EC2Infrastructure createRouteTable(String name, String vpcId) {
-        CreateRouteTableRequest request = new CreateRouteTableRequest().withVpcId(vpcId);
-        CreateRouteTableResult result = ec2Client.createRouteTable(request);
-        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(result.getRouteTable().getRouteTableId());
-        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        CreateRouteTableRequest request = CreateRouteTableRequest.builder().vpcId(vpcId).build();
+        CreateRouteTableResponse result = ec2Client.createRouteTable(request);
+        CreateTagsRequest tagNameRequest = CreateTagsRequest.builder().resources(result.routeTable().routeTableId())
+            .tags(Tag.builder().key("Name").value(name).build()).build();
         ec2Client.createTags(tagNameRequest);
         return this;
     }
@@ -445,10 +441,10 @@ public class EC2Infrastructure {
      * @return the id of the allocated elastic Ip address
      */
     public String createElasticIpAddressOnVpc(String name) {
-        AllocateAddressRequest request = new AllocateAddressRequest().withDomain(DomainType.Vpc);
-        String ipId = ec2Client.allocateAddress(request).getAllocationId();
-        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(ipId);
-        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        AllocateAddressRequest request = AllocateAddressRequest.builder().domain(DomainType.VPC).build();
+        String ipId = ec2Client.allocateAddress(request).allocationId();
+        CreateTagsRequest tagNameRequest = CreateTagsRequest.builder().resources(ipId)
+                .tags(Tag.builder().key("Name").value(name).build()).build();
         ec2Client.createTags(tagNameRequest);
         return ipId;
     }
@@ -461,10 +457,10 @@ public class EC2Infrastructure {
      * @return the nat gateway id
      */
     public String createNatGateway(String name, String subnetId, String elasticIpId) {
-        CreateNatGatewayRequest natRequest = new CreateNatGatewayRequest().withSubnetId(subnetId).withAllocationId(elasticIpId);
-        String natGatewayId =  ec2Client.createNatGateway(natRequest).getNatGateway().getNatGatewayId();
-        CreateTagsRequest tagNameRequest = new CreateTagsRequest().withResources(natGatewayId);
-        tagNameRequest.withTags(new Tag().withKey("Name").withValue(name));
+        CreateNatGatewayRequest natRequest = CreateNatGatewayRequest.builder().subnetId(subnetId).allocationId(elasticIpId).build();
+        String natGatewayId =  ec2Client.createNatGateway(natRequest).natGateway().natGatewayId();
+        CreateTagsRequest tagNameRequest = CreateTagsRequest.builder().resources(natGatewayId)
+                .tags(Tag.builder().key("Name").value(name).build()).build();
         ec2Client.createTags(tagNameRequest);
         return natGatewayId;
     }
