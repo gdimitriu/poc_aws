@@ -20,32 +20,27 @@
 
 package poc_aws.projects.sns_with_sqs;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.sns.AmazonSNS;
-import com.amazonaws.services.sns.AmazonSNSClientBuilder;
-import com.amazonaws.services.sns.model.CreateTopicRequest;
-import com.amazonaws.services.sns.model.PublishRequest;
-import com.amazonaws.services.sns.model.Tag;
-import com.amazonaws.services.sns.util.Topics;
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
-import com.amazonaws.services.sqs.model.CreateQueueRequest;
-import com.amazonaws.services.sqs.model.DeleteMessageRequest;
-import com.amazonaws.services.sqs.model.Message;
-import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sns.SnsClient;
+import software.amazon.awssdk.services.sns.model.*;
+import software.amazon.awssdk.services.sqs.SqsClient;
+import software.amazon.awssdk.services.sqs.model.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 
 public class SNSwithSQS {
 
     /** client for the SQS system */
-    private AmazonSQS sqsClient;
+    private SqsClient sqsClient;
     /** client for the SNS system */
-    private AmazonSNS snsClient;
+    private SnsClient snsClient;
 
     public static void main(String...args) {
         SNSwithSQS client = new SNSwithSQS();
@@ -104,9 +99,11 @@ public class SNSwithSQS {
     }
 
     public SNSwithSQS() {
-        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        sqsClient = AmazonSQSClientBuilder.standard().withRegion(Regions.US_EAST_1).withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
-        snsClient = AmazonSNSClientBuilder.standard().withRegion(Regions.US_EAST_1).withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
+        AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
+        sqsClient = SqsClient.builder().region(Region.US_EAST_1).credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .httpClientBuilder(UrlConnectionHttpClient.builder()).build();
+        snsClient = SnsClient.builder().region(Region.US_EAST_1).credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
     /**
@@ -114,7 +111,7 @@ public class SNSwithSQS {
      * @param queueUrl the url of the queue
      */
     public void deleteQueue(String queueUrl) {
-        sqsClient.deleteQueue(queueUrl);
+        sqsClient.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
     }
 
     /**
@@ -122,7 +119,7 @@ public class SNSwithSQS {
      * @param topicArn  the arn of the topic
      */
     public void deleteTopic(String topicArn) {
-        snsClient.deleteTopic(topicArn);
+        snsClient.deleteTopic(DeleteTopicRequest.builder().topicArn(topicArn).build());
     }
 
     /**
@@ -133,10 +130,12 @@ public class SNSwithSQS {
      * @return the url of the queue
      */
     public String createQueue(String queueName, int delay, int retentionPeriod) {
-        CreateQueueRequest request = new CreateQueueRequest().withQueueName(queueName)
-                .addAttributesEntry("DelaySeconds", Integer.toString(delay))
-                .addAttributesEntry("MessageRetentionPeriod", Integer.toString(retentionPeriod));
-        return sqsClient.createQueue(request).getQueueUrl();
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("DelaySeconds", Integer.toString(delay));
+        attributes.put("MessageRetentionPeriod", Integer.toString(retentionPeriod));
+        CreateQueueRequest request = CreateQueueRequest.builder().queueName(queueName)
+                .attributesWithStrings(attributes).build();
+        return sqsClient.createQueue(request).queueUrl();
     }
 
     /**
@@ -145,8 +144,9 @@ public class SNSwithSQS {
      * @return the arn of the created topic
      */
     public String createTopic(String topicName) {
-        CreateTopicRequest request = new CreateTopicRequest().withName(topicName).withTags(new Tag().withKey("Name").withValue(topicName));
-        return snsClient.createTopic(request).getTopicArn();
+        CreateTopicRequest request = CreateTopicRequest.builder().name(topicName)
+                .tags(Tag.builder().key("Name").value(topicName).build()).build();
+        return snsClient.createTopic(request).topicArn();
     }
 
     /**
@@ -155,7 +155,8 @@ public class SNSwithSQS {
      * @param message the message to be send
      */
     public void publishMessage(String topicArn, String message) {
-        PublishRequest request = new PublishRequest().withTopicArn(topicArn).withMessage(message).withSubject("message from SNS");
+        PublishRequest request = PublishRequest.builder().topicArn(topicArn)
+                .message(message).subject("message from SNS").build();
         snsClient.publish(request);
     }
 
@@ -166,7 +167,8 @@ public class SNSwithSQS {
      * @return the arn of the subscription
      */
     public String subscribeSQStoSNS(String queueUrl, String topicArn) {
-        return Topics.subscribeQueue(snsClient, sqsClient, topicArn, queueUrl);
+        SubscribeResponse response = snsClient.subscribe(SubscribeRequest.builder().protocol("sqs").endpoint(queueUrl).topicArn(topicArn).build());
+        return response.subscriptionArn();
     }
 
     /**
@@ -174,15 +176,15 @@ public class SNSwithSQS {
      * @param queueUrl the queue url from where to read the messages
      */
     public void readMessages(String queueUrl) {
-        ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest().withQueueUrl(queueUrl);
-        List<Message> messages = sqsClient.receiveMessage(receiveMessageRequest).getMessages();
-        messages.forEach(a -> System.out.println("Received message: " + a.getBody()));
+        ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest.builder().queueUrl(queueUrl).build();
+        List<Message> messages = sqsClient.receiveMessage(receiveMessageRequest).messages();
+        messages.forEach(a -> System.out.println("Received message: " + a.body()));
         if (messages.size() > 0) {
-            DeleteMessageRequest deleteMessageRequest = new DeleteMessageRequest().withQueueUrl(queueUrl);
+            DeleteMessageRequest.Builder deleteMessageRequest = DeleteMessageRequest.builder().queueUrl(queueUrl);
             for (Message message : messages) {
-                deleteMessageRequest.setReceiptHandle(message.getReceiptHandle());
+                deleteMessageRequest.receiptHandle(message.receiptHandle());
             }
-            sqsClient.deleteMessage(deleteMessageRequest);
+            sqsClient.deleteMessage(deleteMessageRequest.build());
         }
     }
 
@@ -195,15 +197,15 @@ public class SNSwithSQS {
     public void cleanUp(String queueUrl, String topicArn, String subscribeArn) {
         if (subscribeArn != null) {
             //unsubscribe the queue
-            snsClient.unsubscribe(subscribeArn);
+            snsClient.unsubscribe(UnsubscribeRequest.builder().subscriptionArn(subscribeArn).build());
         }
         if (topicArn != null) {
             //delete the topic
-            snsClient.deleteTopic(topicArn);
+            snsClient.deleteTopic(DeleteTopicRequest.builder().topicArn(topicArn).build());
         }
         if (queueUrl != null) {
             //delete the queue
-            sqsClient.deleteQueue(queueUrl);
+            sqsClient.deleteQueue(DeleteQueueRequest.builder().queueUrl(queueUrl).build());
         }
     }
 
@@ -212,6 +214,6 @@ public class SNSwithSQS {
      * @param subscribeArn the arn of the subscription
      */
     public void unsubscribe(String subscribeArn) {
-        snsClient.unsubscribe(subscribeArn);
+        snsClient.unsubscribe(UnsubscribeRequest.builder().subscriptionArn(subscribeArn).build());
     }
 }

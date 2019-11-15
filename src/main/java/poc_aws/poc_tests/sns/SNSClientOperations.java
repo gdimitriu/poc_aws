@@ -20,19 +20,17 @@
 
 package poc_aws.poc_tests.sns;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.profile.ProfileCredentialsProvider;
-import com.amazonaws.regions.Regions;
-import com.amazonaws.services.sns.AmazonSNS;
-import com.amazonaws.services.sns.AmazonSNSClientBuilder;
-import com.amazonaws.services.sns.model.CreateTopicRequest;
-import com.amazonaws.services.sns.model.DeleteTopicRequest;
-import com.amazonaws.services.sns.model.PublishRequest;
-import com.amazonaws.services.sns.model.Tag;
-import com.amazonaws.services.sqs.AmazonSQS;
-import com.amazonaws.services.sqs.AmazonSQSClientBuilder;
-import com.amazonaws.services.sqs.model.*;
+
+import software.amazon.awssdk.auth.credentials.AwsCredentials;
+import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.sns.SnsClient;
+import software.amazon.awssdk.services.sns.model.CreateTopicRequest;
+import software.amazon.awssdk.services.sns.model.DeleteTopicRequest;
+import software.amazon.awssdk.services.sns.model.PublishRequest;
+import software.amazon.awssdk.services.sns.model.Tag;
 
 import java.util.List;
 import java.util.Map;
@@ -41,7 +39,7 @@ import java.util.Scanner;
 public class SNSClientOperations {
 
 
-    private AmazonSNS snsClient;
+    private SnsClient snsClient;
     public static void main(String...args) {
         SNSClientOperations client = new SNSClientOperations();
         String topicArn = null;
@@ -71,8 +69,9 @@ public class SNSClientOperations {
     }
 
     public SNSClientOperations() {
-        AWSCredentials credentials = new ProfileCredentialsProvider().getCredentials();
-        snsClient = AmazonSNSClientBuilder.standard().withRegion(Regions.US_EAST_1).withCredentials(new AWSStaticCredentialsProvider(credentials)).build();
+        AwsCredentials credentials = ProfileCredentialsProvider.builder().build().resolveCredentials();
+        snsClient = SnsClient.builder().region(Region.US_EAST_1).credentialsProvider(StaticCredentialsProvider.create(credentials))
+                .httpClientBuilder(UrlConnectionHttpClient.builder()).build();
     }
 
     /**
@@ -81,8 +80,9 @@ public class SNSClientOperations {
      * @return the arn of the topic
      */
     public String createTopic(String topicName) {
-        CreateTopicRequest request = new CreateTopicRequest().withName(topicName).withTags(new Tag().withKey("Name").withValue(topicName));
-        return snsClient.createTopic(request).getTopicArn();
+        CreateTopicRequest request = CreateTopicRequest.builder().name(topicName)
+                .tags(Tag.builder().key("Name").value(topicName).build()).build();
+        return snsClient.createTopic(request).topicArn();
     }
 
     /**
@@ -90,12 +90,12 @@ public class SNSClientOperations {
      * @param topicArn  the arn of the topic
      */
     public void deleteTopic(String topicArn) {
-        DeleteTopicRequest request = new DeleteTopicRequest().withTopicArn(topicArn);
+        DeleteTopicRequest request = DeleteTopicRequest.builder().topicArn(topicArn).build();
         snsClient.deleteTopic(request);
     }
 
     public void sendMessage(String topicArn, String message) {
-        PublishRequest request = new PublishRequest().withMessage(message).withTopicArn(topicArn);
+        PublishRequest request = PublishRequest.builder().message(message).topicArn(topicArn).build();
         snsClient.publish(request);
     }
 }
