@@ -161,13 +161,54 @@ public class SNSwithSQS {
     }
 
     /**
+     * convert the queueUrl to arn
+     * @param queueUrl
+     * @return
+     */
+    private String getQueueArnFromUrl(String queueUrl) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("arn:aws:sqs:");
+        //AZ
+        int firstIndex = queueUrl.indexOf('.');
+        int secondIndex = queueUrl.indexOf('.',firstIndex + 1);
+        builder.append(queueUrl.substring(firstIndex + 1, secondIndex) + ":");
+        //user
+        firstIndex = queueUrl.indexOf('/',secondIndex);
+        secondIndex = queueUrl.indexOf('/', firstIndex + 1);
+        builder.append(queueUrl.substring(firstIndex + 1, secondIndex) + ":");
+        builder.append(queueUrl.substring(secondIndex + 1));
+        return  builder.toString();
+    }
+    /**
      * subscribe SQS queue to the SNS topic.
      * @param queueUrl the url of the SQS queue
      * @param topicArn the SNS topic arn
      * @return the arn of the subscription
      */
     public String subscribeSQStoSNS(String queueUrl, String topicArn) {
-        SubscribeResponse response = snsClient.subscribe(SubscribeRequest.builder().protocol("sqs").endpoint(queueUrl).topicArn(topicArn).build());
+        String sqsQueueArn = getQueueArnFromUrl(queueUrl);
+        Map<QueueAttributeName, String> attributes = new HashMap<>();
+        String jsonData = "{" +
+        "        \"Version\" : \"2008-10-17\","+
+        "        \"Statement\" : [{" +
+        "            \"Sid\" :  \"topic-subscription-" + topicArn + "\"," +
+        "            \"Effect\" : \"Allow\"," +
+        "            \"Principal\" : {" +
+        "        \"AWS\":[\"*\"]" +
+        "     }," +
+        "      \"Action\" : [\"SQS:SendMessage\"]," +
+        "       \"Resource\":[\""+ sqsQueueArn + "\"]," +
+        "     \"Condition\" : {" +
+        "        \"ArnEquals\":{" +
+        "           \"aws:SourceArn\":[\"" + topicArn + "\"]" +
+        "        }" +
+        "      }" +
+        " }]" +
+        "}";
+        attributes.put(QueueAttributeName.POLICY, jsonData);
+        sqsClient.setQueueAttributes(SetQueueAttributesRequest.builder().queueUrl(queueUrl).attributes(attributes).build());
+        SubscribeResponse response = snsClient.subscribe(SubscribeRequest.builder().protocol("SQS")
+                .endpoint(sqsQueueArn).topicArn(topicArn).build());
         return response.subscriptionArn();
     }
 
