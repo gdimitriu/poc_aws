@@ -20,6 +20,8 @@
 
 package poc_aws.projects.sns_with_sqs;
 
+import com.google.gson.Gson;
+import poc_aws.utils.auth.Policy;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -188,24 +190,11 @@ public class SNSwithSQS {
     public String subscribeSQStoSNS(String queueUrl, String topicArn) {
         String sqsQueueArn = getQueueArnFromUrl(queueUrl);
         Map<QueueAttributeName, String> attributes = new HashMap<>();
-        String jsonData = "{" +
-        "        \"Version\" : \"2008-10-17\","+
-        "        \"Statement\" : [{" +
-        "            \"Sid\" :  \"topic-subscription-" + topicArn + "\"," +
-        "            \"Effect\" : \"Allow\"," +
-        "            \"Principal\" : {" +
-        "        \"AWS\":[\"*\"]" +
-        "     }," +
-        "      \"Action\" : [\"SQS:SendMessage\"]," +
-        "       \"Resource\":[\""+ sqsQueueArn + "\"]," +
-        "     \"Condition\" : {" +
-        "        \"ArnEquals\":{" +
-        "           \"aws:SourceArn\":[\"" + topicArn + "\"]" +
-        "        }" +
-        "      }" +
-        " }]" +
-        "}";
-        attributes.put(QueueAttributeName.POLICY, jsonData);
+        String jsonDataPolicy = new Policy().withSid("topic-subscription-" + topicArn)
+                .withEffect("Allow").withPrincipal("AWS", "*")
+                .withAction("SQS:SendMessage").withResource(sqsQueueArn)
+                .withCondition("ArnEquals", "aws:SourceArn", topicArn).toJson();
+        attributes.put(QueueAttributeName.POLICY, jsonDataPolicy);
         sqsClient.setQueueAttributes(SetQueueAttributesRequest.builder().queueUrl(queueUrl).attributes(attributes).build());
         SubscribeResponse response = snsClient.subscribe(SubscribeRequest.builder().protocol("SQS")
                 .endpoint(sqsQueueArn).topicArn(topicArn).build());
