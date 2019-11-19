@@ -15,7 +15,16 @@ public class PolicyLoadTest {
         System.out.println(jsonPolicy);
     }
 
+    @Test
+    public void EC2_With_full_S3() {
+        String jsonPolicy;
+        Policy policy = new Policy("2012-10-17").withEffect("Allow").withAction("sts:AssumeRole").withPrincipal("Service", "ec2.amazonaws.com");
+        jsonPolicy = policy.toJson();
+        System.out.println(jsonPolicy);
+    }
+
     public static void main(String...args) {
         new PolicyLoadTest().loadAndTestJsonPolicy();
+        new PolicyLoadTest().EC2_With_full_S3();
     }
 }

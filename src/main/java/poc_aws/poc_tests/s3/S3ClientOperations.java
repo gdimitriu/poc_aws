@@ -20,6 +20,7 @@
 
 package poc_aws.poc_tests.s3;
 
+import poc_aws.utils.auth.Policy;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -208,19 +209,10 @@ public class S3ClientOperations {
     }
 
     public void setPublicReadPolicy(String bucketName) {
-        String readAllPolicy = "{" +
-                "    \"Version\": \"2012-10-17\"," +
-                "    \"Statement\": [" +
-                "        {" +
-                "            \"Effect\": \"Allow\"," +
-                "            \"Action\": \"s3:GetObject\"," +
-                "            \"Resource\": \"arn:aws:s3:::" + bucketName + "/*" + "\"," +
-                "            \"Principal\": {" +
-                "                  \"AWS\":[ \"*\"]" +
-                "            }" +
-                "        }" +
-                "    ]" +
-                "}";
-        s3client.putBucketPolicy(PutBucketPolicyRequest.builder().bucket(bucketName).policy(readAllPolicy).build());
+        String readAllPolicyJson = new Policy("2012-10-17")
+                .withEffect("Allow").withAction("s3:GetObject")
+                .withResource("arn:aws:s3:::" + bucketName + "/*")
+                .withPrincipal("AWS","*").toJson();
+        s3client.putBucketPolicy(PutBucketPolicyRequest.builder().bucket(bucketName).policy(readAllPolicyJson).build());
     }
 }

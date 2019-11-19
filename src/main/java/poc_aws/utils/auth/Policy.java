@@ -1,4 +1,23 @@
 package poc_aws.utils.auth;
+/*
+ Copyright (c) 2019 Gabriel Dimitriu All rights reserved.
+ DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+
+ This file is part of poc_aws project.
+
+ poc_aws is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ poc_aws is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with poc_aws.  If not, see <http://www.gnu.org/licenses/>.
+ */
 
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
@@ -68,23 +87,16 @@ class PolicyStatement {
     private String effect;
 
     @SerializedName("Principal")
-    private Map<String, List<String>> principal;
+    private Map<String, List<String>> principal = null;
 
     @SerializedName("Action")
-    private List<String> actions;
+    private List<String> actions = null;
 
     @SerializedName("Resource")
-    private List<String> resource;
+    private List<String> resource = null;
 
     @SerializedName("Condition")
-    private Map<String, Map<String, List<String>>> conditions;
-
-    public PolicyStatement() {
-        principal = new HashMap<>();
-        actions = new ArrayList<>();
-        resource = new ArrayList<>();
-        conditions = new HashMap<>();
-    }
+    private Map<String, Map<String, List<String>>> conditions = null;
 
     public void setSid(String sid) {
         this.sid = sid;
@@ -95,14 +107,23 @@ class PolicyStatement {
     }
 
     public void addAction(String action) {
+        if (actions == null) {
+            actions = new ArrayList<>();
+        }
         this.actions.add(action);
     }
 
     public void addResource(String resource) {
+        if (this.resource == null) {
+            this.resource = new ArrayList<>();
+        }
         this.resource.add(resource);
     }
 
     public void addPrincipal(String service, String rule) {
+        if (principal == null) {
+            principal = new HashMap<>();
+        }
         if (principal.containsKey(service)) {
             principal.get(service).add(rule);
         } else {
@@ -112,6 +133,9 @@ class PolicyStatement {
         }
     }
     public void addCondition(String condition, String type, String resource) {
+        if (conditions == null) {
+            conditions = new HashMap<>();
+        }
         if (conditions.containsKey(condition)) {
             Map<String, List<String>> theCondition = conditions.get(condition);
             if (theCondition != null && theCondition.containsKey(type)) {

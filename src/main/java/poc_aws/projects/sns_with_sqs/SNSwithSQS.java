@@ -20,7 +20,6 @@
 
 package poc_aws.projects.sns_with_sqs;
 
-import com.google.gson.Gson;
 import poc_aws.utils.auth.Policy;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.ProfileCredentialsProvider;
