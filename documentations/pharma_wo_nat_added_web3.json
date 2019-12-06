@@ -80,7 +80,7 @@
         ]
       }
     },
-    "igw0fc79eee79122b9a5": {
+    "InternetGateway": {
       "Type": "AWS::EC2::InternetGateway",
       "Properties": {
         "Tags": [
@@ -182,6 +182,9 @@
           },
           {
             "Ref": "WebInstance2"
+          },
+          {
+            "Ref": "WebInstance3"
           }
         ],
         "SecurityGroups": [
@@ -203,18 +206,6 @@
             "Value": "PharmaLB"
           }
         ]
-      }
-    },
-    "eip342261711": {
-      "Type": "AWS::EC2::EIP",
-      "Properties": {
-        "Domain": "vpc"
-      }
-    },
-    "eip5272209153": {
-      "Type": "AWS::EC2::EIP",
-      "Properties": {
-        "Domain": "vpc"
       }
     },
     "WebInstance1": {
@@ -246,6 +237,39 @@
                 "Primary": "true"
               }
             ],
+            "GroupSet": [
+              {
+                "Ref": "sgWebServerSecurityGroupLinux"
+              }
+            ],
+            "AssociatePublicIpAddress": "true"
+          }
+        ]
+      }
+    },
+    "WebInstance3": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "DisableApiTermination": "false",
+        "InstanceInitiatedShutdownBehavior": "stop",
+        "IamInstanceProfile": "EC2_WITH_S3",
+        "ImageId": "ami-019c3d7ceb420c7f4",
+        "InstanceType": "t2.micro",
+        "KeyName": "javaAutoKeyPair",
+        "Monitoring": "false",
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "WebInstance3"
+          }
+        ],
+        "NetworkInterfaces": [
+          {
+            "DeleteOnTermination": "true",
+            "DeviceIndex": 0,
+            "SubnetId": {
+              "Ref": "subnet0be5bacf306225fa8"
+            },
             "GroupSet": [
               {
                 "Ref": "sgWebServerSecurityGroupLinux"
@@ -467,7 +491,7 @@
           "Ref": "vpc0a3526aa7bec918c1"
         },
         "InternetGatewayId": {
-          "Ref": "igw0fc79eee79122b9a5"
+          "Ref": "InternetGateway"
         }
       }
     },
@@ -515,43 +539,16 @@
         }
       }
     },
-    "route1": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "RouteTableId": {
-          "Ref": "rtb022bd031ba79212f9"
-        },
-        "GatewayId": {
-          "Ref": "igw0fc79eee79122b9a5"
-        }
-      },
-      "DependsOn": "gw1"
-    },
     "route2": {
       "Type": "AWS::EC2::Route",
       "Properties": {
         "DestinationCidrBlock": "0.0.0.0/0",
         "RouteTableId": {
           "Ref": "PubicPharmaRT"
-        },
-        "GatewayId": {
-          "Ref": "igw0fc79eee79122b9a5"
+        },"GatewayId": {
+          "Ref": "InternetGateway"
         }
       },
-      "DependsOn": "gw1"
-    },
-    "route3": {
-      "Type": "AWS::EC2::Route",
-      "Properties": {
-        "DestinationCidrBlock": "0.0.0.0/0",
-        "RouteTableId": {
-          "Ref": "PrivatePharmaRT2"
-        }
-      },
-        "GatewayId": {
-          "Ref": "igw0fc79eee79122b9a5"
-        },
       "DependsOn": "gw1"
     },
     "dchpassoc1": {
