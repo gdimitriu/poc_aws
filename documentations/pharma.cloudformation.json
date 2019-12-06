@@ -122,7 +122,7 @@
         ]
       }
     },
-    "rtb0adc6450c8d677c2d": {
+    "PubicPharmaRT": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": {
@@ -136,7 +136,7 @@
         ]
       }
     },
-    "rtb0f7265a9338e57ac4": {
+    "PrivatePharmaRT2": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
         "VpcId": {
@@ -178,10 +178,10 @@
         "CrossZone": "true",
         "Instances": [
           {
-            "Ref": "instancei0d60d03e76bfcd62e"
+            "Ref": "WebInstance1"
           },
           {
-            "Ref": "instancei0e154561e7a777aff"
+            "Ref": "WebInstance2"
           }
         ],
         "SecurityGroups": [
@@ -217,13 +217,13 @@
         "Domain": "vpc"
       }
     },
-    "instancei0d60d03e76bfcd62e": {
+    "WebInstance1": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "DisableApiTermination": "false",
         "InstanceInitiatedShutdownBehavior": "stop",
-        "IamInstanceProfile": "arn:aws:iam::462208561122:instance-profile/EC2_WITH_S3",
-        "ImageId": "ami-00eb20669e0990cb4",
+        "IamInstanceProfile": "EC2_WITH_S3",
+        "ImageId": "ami-086fe4c9a99446487",
         "InstanceType": "t2.micro",
         "KeyName": "javaAutoKeyPair",
         "Monitoring": "false",
@@ -256,12 +256,12 @@
         ]
       }
     },
-    "instancei0179f69e943aced40": {
+    "DBInstance1": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "DisableApiTermination": "false",
         "InstanceInitiatedShutdownBehavior": "stop",
-        "IamInstanceProfile": "arn:aws:iam::462208561122:instance-profile/EC2_WITH_S3",
+        "IamInstanceProfile": "EC2_WITH_S3",
         "ImageId": "ami-00eb20669e0990cb4",
         "InstanceType": "t2.micro",
         "KeyName": "javaAutoKeyPair",
@@ -295,12 +295,12 @@
         ]
       }
     },
-    "instancei022ca34b2ab284fb6": {
+    "DBInstance2": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "DisableApiTermination": "false",
         "InstanceInitiatedShutdownBehavior": "stop",
-        "IamInstanceProfile": "arn:aws:iam::462208561122:instance-profile/EC2_WITH_S3",
+        "IamInstanceProfile": "EC2_WITH_S3",
         "ImageId": "ami-00eb20669e0990cb4",
         "InstanceType": "t2.micro",
         "KeyName": "javaAutoKeyPair",
@@ -334,13 +334,13 @@
         ]
       }
     },
-    "instancei0e154561e7a777aff": {
+    "WebInstance2": {
       "Type": "AWS::EC2::Instance",
       "Properties": {
         "DisableApiTermination": "false",
         "InstanceInitiatedShutdownBehavior": "stop",
-        "IamInstanceProfile": "arn:aws:iam::462208561122:instance-profile/EC2_WITH_S3",
-        "ImageId": "ami-00eb20669e0990cb4",
+        "IamInstanceProfile": "EC2_WITH_S3",
+        "ImageId": "ami-0ab58bc5d1d1075b4",
         "InstanceType": "t2.micro",
         "KeyName": "javaAutoKeyPair",
         "Monitoring": "false",
@@ -371,15 +371,6 @@
             "AssociatePublicIpAddress": "true"
           }
         ]
-      }
-    },
-    "s3gabrieldimitriupharmaweb": {
-      "Type": "AWS::S3::Bucket",
-      "Properties": {
-        "AccessControl": "Private",
-        "VersioningConfiguration": {
-          "Status": "Suspended"
-        }
       }
     },
     "sgDBServerSecurityGroupLinux": {
@@ -495,7 +486,7 @@
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "RouteTableId": {
-          "Ref": "rtb0adc6450c8d677c2d"
+          "Ref": "PubicPharmaRT"
         },
         "SubnetId": {
           "Ref": "subnet0be5bacf306225fa8"
@@ -506,7 +497,7 @@
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "RouteTableId": {
-          "Ref": "rtb0adc6450c8d677c2d"
+          "Ref": "PubicPharmaRT"
         },
         "SubnetId": {
           "Ref": "subnet01c34f11f8024af44"
@@ -517,7 +508,7 @@
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
         "RouteTableId": {
-          "Ref": "rtb0f7265a9338e57ac4"
+          "Ref": "PrivatePharmaRT2"
         },
         "SubnetId": {
           "Ref": "subnet08d84f4e99fc992d4"
@@ -530,15 +521,19 @@
         "DestinationCidrBlock": "0.0.0.0/0",
         "RouteTableId": {
           "Ref": "rtb022bd031ba79212f9"
+        },
+        "GatewayId": {
+          "Ref": "igw0fc79eee79122b9a5"
         }
-      }
+      },
+      "DependsOn": "gw1"
     },
     "route2": {
       "Type": "AWS::EC2::Route",
       "Properties": {
         "DestinationCidrBlock": "0.0.0.0/0",
         "RouteTableId": {
-          "Ref": "rtb0adc6450c8d677c2d"
+          "Ref": "PubicPharmaRT"
         },
         "GatewayId": {
           "Ref": "igw0fc79eee79122b9a5"
@@ -551,9 +546,13 @@
       "Properties": {
         "DestinationCidrBlock": "0.0.0.0/0",
         "RouteTableId": {
-          "Ref": "rtb0f7265a9338e57ac4"
+          "Ref": "PrivatePharmaRT2"
         }
-      }
+      },
+        "GatewayId": {
+          "Ref": "igw0fc79eee79122b9a5"
+        },
+      "DependsOn": "gw1"
     },
     "dchpassoc1": {
       "Type": "AWS::EC2::VPCDHCPOptionsAssociation",
