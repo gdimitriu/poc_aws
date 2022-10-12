@@ -17,7 +17,7 @@
 
     <properties>
         <java.version>11</java.version>
-        <aws.version>1.11.590</aws.version>
+        <aws.version>1.12.261</aws.version>
     </properties>
 
     <dependencies>
